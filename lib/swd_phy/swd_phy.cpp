@@ -56,26 +56,34 @@ uint32_t s_half_extra = 0;    // extra cycles each half_period() adds beyond hal
 portMUX_TYPE s_irq_lock = portMUX_INITIALIZER_UNLOCKED;
 uint32_t s_clock_hz = 0;
 swd::SelfTest s_selftest = {};
+bool s_port_on = false;  // between DAP_Connect and DAP_Disconnect: only then are the pins driven
 
-// Arbiter hooks: called with the bus mutex held.
-void attach_swd() {
+void drive_pins() {
     gpio_config_t io = {};
     io.pin_bit_mask = CLK_MASK | DIO_MASK;
     io.mode = GPIO_MODE_INPUT_OUTPUT;
     io.pull_up_en = GPIO_PULLUP_DISABLE;
     io.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io.intr_type = GPIO_INTR_DISABLE;
+    GPIO.out_w1ts = CLK_MASK | DIO_MASK;  // SWCLK idle high, SWDIO parked high (set before enabling)
     gpio_config(&io);
     gpio_pullup_en(static_cast<gpio_num_t>(pins::SWD_SWDIO));  // no external pull-up on J6/AD
-    GPIO.out_w1ts = CLK_MASK | DIO_MASK;                        // SWCLK idle high, SWDIO parked high
 }
 
-void detach_swd() {
-    // Release both pins. SCL keeps its board pull-up (high), so the I2C bus sees no edges.
+void release_pins() {
+    // Both pins become inputs. SCL keeps its board pull-up (high), so the I2C bus sees no edges.
     GPIO.enable_w1tc = CLK_MASK | DIO_MASK;
     gpio_set_direction(static_cast<gpio_num_t>(pins::SWD_SWCLK), GPIO_MODE_INPUT);
     gpio_set_direction(static_cast<gpio_num_t>(pins::SWD_SWDIO), GPIO_MODE_INPUT);
 }
+
+// Arbiter hooks (bus mutex held). SWD owning the bus keeps I2C off GPIO9; the pins are only
+// driven while the DAP port is connected.
+void attach_swd() {
+    if (s_port_on) drive_pins();
+    else release_pins();
+}
+void detach_swd() { release_pins(); }
 
 // Cycles per bit of sequence_out() at the current delay setting.
 // no_irq: mask interrupts on this core during each run (diagnostics only, ~0.5 ms at a time).
@@ -121,14 +129,62 @@ uint32_t set_clock(uint32_t hz) {
 uint32_t clock_hz() { return s_clock_hz; }
 Config &config() { return s_engine.cfg; }
 
-void IRAM_ATTR sequence_out(uint32_t count, const uint8_t *data) { s_engine.sequence_out(count, data); }
-void IRAM_ATTR sequence_in(uint32_t count, uint8_t *data) { s_engine.sequence_in(count, data); }
-void IRAM_ATTR line_reset() { s_engine.line_reset(); }
-uint8_t IRAM_ATTR transfer(uint8_t req, uint32_t *data) { return s_engine.transfer(req, data); }
+// While the port is off nothing is clocked: sequences are dropped, transfers report "no ACK".
+void IRAM_ATTR sequence_out(uint32_t count, const uint8_t *data) {
+    if (s_port_on) s_engine.sequence_out(count, data);
+}
+void IRAM_ATTR sequence_in(uint32_t count, uint8_t *data) {
+    if (s_port_on) {
+        s_engine.sequence_in(count, data);
+        return;
+    }
+    for (uint32_t i = 0; i < count; i += 8) data[i >> 3] = 0xFF;
+}
+void IRAM_ATTR line_reset() {
+    if (s_port_on) s_engine.line_reset();
+}
+uint8_t IRAM_ATTR transfer(uint8_t req, uint32_t *data) { return s_port_on ? s_engine.transfer(req, data) : 0x7; }
+
+void configure(const Config &cfg) { s_engine.cfg = cfg; }
+
+void connect() {
+    s_port_on = true;
+    drive_pins();
+}
+
+void disconnect() {
+    s_port_on = false;
+    release_pins();
+}
+
+void pins_write(uint8_t value, uint8_t select) {
+    if (!s_port_on) return;
+    if (select & 0x01) {
+        if (value & 0x01) GPIO.out_w1ts = CLK_MASK;
+        else GPIO.out_w1tc = CLK_MASK;
+    }
+    if (select & 0x02) {
+        GPIO.enable_w1ts = DIO_MASK;
+        if (value & 0x02) GPIO.out_w1ts = DIO_MASK;
+        else GPIO.out_w1tc = DIO_MASK;
+    }
+}
+
+uint8_t pins_read() {
+    const uint32_t in = GPIO.in;
+    return static_cast<uint8_t>(((in & CLK_MASK) ? 0x01 : 0) | ((in & DIO_MASK) ? 0x02 : 0) | 0x80 /* nRESET */);
+}
+
+void IRAM_ATTR delay_cycles(uint32_t cycles) {
+    const uint32_t start = esp_cpu_get_cycle_count();
+    while (esp_cpu_get_cycle_count() - start < cycles) {
+    }
+}
 
 SelfTest self_test() {
     SelfTest r = {};
     if (!arb::acquire(arb::Owner::Swd, 100)) return r;
+    connect();
 
     // 1. Raw speed: no delay at all. Calibration point A (GPIO write cost per bit).
     s_pins.half_cycles = 0;
@@ -152,6 +208,7 @@ SelfTest self_test() {
     uint32_t dpidr = 0;
     r.dpidr_ack = transfer(REQ_RnW, &dpidr);
 
+    disconnect();
     arb::release(arb::Owner::Swd);
     r.ran = true;
     s_selftest = r;

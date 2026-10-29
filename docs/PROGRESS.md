@@ -3,12 +3,13 @@
 > Update this file at the end of every phase (and whenever a decision is made). Newest entries at the top of each section.
 
 ## Current status
-- **Phase:** 3 **done** (real-wire validation PENDING-HW). Next: Phase 4 (CMSIS-DAP engine + simulated target).
+- **Phase:** 4 **done** pending a final on-board check of the IDR fix (see log). Next: Phase 5 (host tool decision).
 - **Hardware in hand:** Waveshare ESP32-S3-LCD-4.3 only. EK-RA8D1 is **not available** (all PENDING-HW items blocked).
 
 ## Phase log
 | Date | Phase | Result | Notes |
 |---|---|---|---|
+| 2026-10-29 | 4 | **Done** | ARM DAP.c V2.1.2 ported (2 marked changes) + our DAP_config.h/glue on top of swd_engine; swd_sim (DP + MEM-AP + 64 KB RAM); esp32_sim env; 24 native tests. Over WiFi against SIM: info, connect (DPIDR 0x0FA01001), write32/read32/dump round-trip, unmapped read -> FAULT. Bug found on HW: sim returned 0xFC for AP IDR (constant name shadowing), fixed + test added |
 | 2026-10-29 | 3 | **Done** | swd_engine (template, 12 native tests incl. a mutation check), ESP32 pin layer, bus_arbiter, boot self-test shown on screen. GPIO6 checked in schematic. Fixed: INFO/WARN logs were compiled out in modules that included esp_log.h directly (new `wdbg_log.h`) |
 | 2026-10-29 | 2 | **Done** | `bb_invalidate_cache` on: avg latency 77 -> 14 ms, p95 166 -> 37 ms, max 4359 -> 57 ms; 66 / 212 frames/s (window 1 / 4). Boot log clean. Screen confirmed fine by Saro |
 | 2026-10-29 | 2 | Display driver swap | LovyanGFX replaced by ESP-IDF esp_lcd RGB driver with bounce buffers (Saro's call: he saw the same issue before, lowering pclk didn't help). ~18x throughput vs LovyanGFX, still ~2x below display-off |
@@ -29,6 +30,7 @@
 | 2026-10-29 | Git: `main` = baseline, work on `dev` (github.com/saravana2003/wireless_debugger) | Saro's request |
 | 2026-10-29 | Display: LovyanGFX -> ESP-IDF `esp_lcd` RGB driver, bounce buffers, LVGL draw buffers in internal RAM, LV_COLOR_16_SWAP=0 | LovyanGFX+RGB made WiFi 25-40x slower; esp_lcd bounce buffers keep LCD DMA off the PSRAM bus |
 | 2026-10-29 | GPIO6 OK for SWDIO: direct trace to J6 pin 3, no R/C (schematic checked), internal pull-up enabled | 02_HARDWARE §3 TODO closed |
+| 2026-10-29 | Probe only drives SWCLK/SWDIO between DAP_Connect and DAP_Disconnect; GPIO9 arbiter taken once per DAP packet | Don't disturb a target the host isn't using |
 | (pending) | Host tool choice (OpenOCD TCP / pyOCD plugin / elaphureLink / USB-IP) | Decide in Phase 5 |
 
 ## Measurements
@@ -43,6 +45,8 @@
 | 2026-10-29 | Echo throughput 1 KB frames, window 1 / 4, **display ON** | 3 / 8 frames/s (3.4 / 7.8 KiB/s each way) |
 | 2026-10-29 | Echo throughput 1 KB frames, window 1 / 4, **display OFF** | 107 / 307 frames/s (107 / 307 KiB/s each way) |
 | 2026-10-29 | ICMP ping laptop -> ESP32 (STA, power-save off), 20 pings | min 47 / avg 136 / max 502 ms (router: 2 ms) |
+| 2026-10-29 | CMSIS-DAP round trip (DAP_Info) x300, SIM build | min 3.2 / median 5.9 / avg 6.6 / p95 11.2 / max 49 ms |
+| 2026-10-29 | Memory reads via DAP_TransferBlock (255 words), SIM, window 1 / 4 | 82.5 / 101.7 KiB/s (no SWD wire time; real target @1 MHz will be ~20 KB/s) |
 | 2026-10-29 | Max SWCLK, direct GPIO registers, no delay | **1283 kHz** (187 CPU cycles/bit), identical with IRQs masked -> GPIO register access is the limit, not the LCD ISR |
 | 2026-10-29 | SWCLK at the 1 MHz default | 983 kHz measured |
 | 2026-10-29 | DPIDR read, nothing connected | ACK 0x7 (pull-up), as expected |
@@ -60,5 +64,6 @@
 ## Third-party code used
 | Source | License | Files | Notes |
 |---|---|---|---|
-| ARM CMSIS-DAP `SW_DP.c`, `DAP.h` (github.com/ARM-software/CMSIS-DAP) | Apache-2.0 | none copied | Reference only: swd_engine.h behaviour and DAP_TRANSFER_* values checked against it |
+| ARM CMSIS-DAP `DAP.c`, `DAP.h` V2.1.2 (github.com/ARM-software/CMSIS-DAP @ 1263659) | Apache-2.0 | `lib/dap_engine/DAP.c`, `DAP.h`, `LICENSE` | Copied with license headers. 2 changes, marked `WDBG:` + notice in the header: DAP_SetClockHook() call in Set_Clock_Delay(); PIN_DELAY_SLOW overridable (default is Thumb asm). `DAP_config.h`, `cmsis_compiler.h`, `dap_glue.cpp` are our own |
+| ARM CMSIS-DAP `SW_DP.c` | Apache-2.0 | none copied | Reference only: swd_engine.h behaviour checked against it |
 | Espressif `esp_io_expander_ch422g.c` (ESP32_IO_Expander) | Apache-2.0 | none copied | Used only as the reference for CH422G addresses 0x24 / 0x38 and the IO_OE bit |

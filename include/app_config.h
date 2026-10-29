@@ -1,7 +1,7 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.3.0"
+#define WDBG_FW_VERSION      "0.4.0"
 
 // 0 = don't start the LCD/LVGL (diagnostics: e.g. WiFi A/B test without PSRAM framebuffer traffic).
 #ifndef WDBG_DISPLAY
@@ -22,7 +22,12 @@
 #define WDBG_FRAME_MAX       4096       // max payload of one TCP frame (bytes)
 #define WDBG_RX_TIMEOUT_MS   2000       // drop the client if a frame stalls half-way
 
-// CMSIS-DAP (used from Phase 4; reported via DAP_Info)
+// Target: 0 = real SWD pins, 1 = simulated target (esp32_sim env sets -DWDBG_TARGET_SIM=1)
+#ifndef WDBG_TARGET_SIM
+#define WDBG_TARGET_SIM        0
+#endif
+
+// CMSIS-DAP (reported via DAP_Info). Packet size must be <= WDBG_FRAME_MAX.
 #define WDBG_DAP_PACKET_SIZE   1024
 #define WDBG_DAP_PACKET_COUNT  4
 

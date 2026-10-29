@@ -4,19 +4,13 @@
 
 #include "app_config.h"
 #include "ch422g.h"
+#include "probe.h"
 #include "swd_phy.h"
 #include "ui.h"
 #include "tcp_server.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "main";
-
-// Phase 2 handler: echo the request back unchanged. Replaced by the DAP engine in Phase 4.
-static size_t echo_handler(const uint8_t *req, size_t len, uint8_t *resp, size_t cap) {
-    const size_t n = len < cap ? len : cap;
-    memcpy(resp, req, n);
-    return n;
-}
 
 void setup() {
     Serial.begin(115200);
@@ -42,12 +36,13 @@ void setup() {
     // SDA idles high, so the I2C devices on GPIO9 never see a START).
     swd::init();
     swd::self_test();
+    probe::init();
 
 #if WDBG_DISPLAY
     ui::start_task();
 #endif
     net::wifi_start();
-    net::tcp_start(echo_handler);
+    net::tcp_start(probe::handle_frame);
     ESP_LOGI(TAG, "boot done, free heap %u, free PSRAM %u",
              (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getFreePsram());
 }

@@ -20,6 +20,17 @@ uint32_t clock_hz();
 
 Config &config();
 
+// DAP_Connect / DAP_Disconnect: start / stop driving SWCLK and SWDIO. While disconnected all
+// SWD calls are no-ops (transfers return 0x7). Bus must be held.
+void connect();
+void disconnect();
+void configure(const Config &cfg);
+
+// DAP_SWJ_Pins: bit 0 = SWCLK, bit 1 = SWDIO (DAP.h DAP_SWJ_*). nRESET is not wired.
+void pins_write(uint8_t value, uint8_t select);
+uint8_t pins_read();
+void delay_cycles(uint32_t cycles);
+
 void sequence_out(uint32_t count, const uint8_t *data);
 void sequence_in(uint32_t count, uint8_t *data);
 void line_reset();

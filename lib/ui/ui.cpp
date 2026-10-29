@@ -10,6 +10,7 @@
 
 #include "app_config.h"
 #include "lcd_rgb.h"
+#include "dap_engine.h"
 #include "stats.h"
 #include "swd_phy.h"
 #include "wifi_mgr.h"
@@ -37,6 +38,7 @@ lv_obj_t *s_wifi_val = nullptr;
 lv_obj_t *s_ip_val = nullptr;
 lv_obj_t *s_client_val = nullptr;
 lv_obj_t *s_swd_val = nullptr;
+lv_obj_t *s_target_val = nullptr;
 
 void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     // LV_COLOR_16_SWAP=0 -> native RGB565, which is what the esp_lcd frame buffer holds.
@@ -73,7 +75,7 @@ void build_boot_screen() {
     s_wifi_val = add_row(scr, "WiFi:", 130);
     s_ip_val = add_row(scr, "IP:", 170);
     s_client_val = add_row(scr, "Client:", 210);
-    add_row(scr, "Target:", 250);
+    s_target_val = add_row(scr, "Target:", 250);
     s_swd_val = add_row(scr, "SWD:", 290);
 }
 
@@ -100,6 +102,14 @@ void refresh_client() {
     const uint8_t *b = reinterpret_cast<const uint8_t *>(&ip);  // network byte order
     lv_label_set_text_fmt(s_client_val, "%u.%u.%u.%u   %u pkt/s   %u kB/s   errors %u",
                           b[0], b[1], b[2], b[3], (unsigned)fps, (unsigned)kbps, (unsigned)errs);
+}
+
+// Target row: which backend, and the host's DAP_HostStatus indicators.
+void refresh_target() {
+    const dap::HostStatus hs = dap::host_status();
+    lv_label_set_text_fmt(s_target_val, "%s   debugger %s%s",
+                          WDBG_TARGET_SIM ? "SIMULATED (64 KB RAM @ 0x20000000)" : "SWD pins (GPIO6/GPIO9)",
+                          hs.connected ? "connected" : "idle", hs.running ? ", target running" : "");
 }
 
 // SWD row: boot self-test result (Phase 3).
@@ -139,6 +149,7 @@ void refresh_status(lv_timer_t *) {
     }
     refresh_client();
     refresh_swd();
+    refresh_target();
 }
 
 void ui_task(void *) {
