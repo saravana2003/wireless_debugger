@@ -3,12 +3,13 @@
 > Update this file at the end of every phase (and whenever a decision is made). Newest entries at the top of each section.
 
 ## Current status
-- **Phase:** 2 (TCP server + raw framing + host test client) in progress. Phase 1 accepted with mDNS as an open item (use the IP).
+- **Phase:** 2 functionally done (TCP echo server + dap_client.py, numbers below). **Blocker found: the RGB LCD degrades WiFi ~25-40x.** Fix approach awaiting Saro's decision. Board currently runs the display-off test build (`WDBG_DISPLAY=0`).
 - **Hardware in hand:** Waveshare ESP32-S3-LCD-4.3 only. EK-RA8D1 is **not available** (all PENDING-HW items blocked).
 
 ## Phase log
 | Date | Phase | Result | Notes |
 |---|---|---|---|
+| 2026-10-29 | 2 | Server OK, perf blocker | Echo over TCP works, reconnects fine. A/B test proves the RGB LCD causes the bad WiFi (table in Measurements). Also fixed a boot loop: socket() before lwIP init asserted in sys_mutex_lock |
 | 2026-10-29 | 1 | Partial | STA joins home WiFi (192.168.1.61), screen shows mode/SSID/RSSI/IP, board reports mDNS started. **`wdbg.local` does not resolve on the laptop** (see Open questions). Ping by IP OK, but slow: min 47 / avg 136 / max 502 ms (router itself: 2 ms) |
 | 2026-10-29 | 0 | **Done** | Flashed via native USB (COM15). Saro confirmed: backlight on, boot screen readable, colours correct (LV_COLOR_16_SWAP=1 + swap565_t is right) |
 | 2026-10-29 | 0 | Build OK | Skeleton, board_pins/app_config/secrets template, LGFX (touch removed), LVGL boot screen, CH422G boot init. Flash 27.6 %, RAM 8.1 %. Not yet flashed (board not connected) |
@@ -28,6 +29,10 @@
 ## Measurements
 | Date | What | Value |
 |---|---|---|
+| 2026-10-29 | TCP echo latency, 64 B x 200, **display ON** | min 8.7 / median 81 / avg 187 / p95 498 / max 1363 ms |
+| 2026-10-29 | TCP echo latency, 64 B x 200, **display OFF** (`WDBG_DISPLAY=0`) | min 2.9 / median 5.7 / avg 7.5 / p95 16.9 / max 118 ms |
+| 2026-10-29 | Echo throughput 1 KB frames, window 1 / 4, **display ON** | 3 / 8 frames/s (3.4 / 7.8 KiB/s each way) |
+| 2026-10-29 | Echo throughput 1 KB frames, window 1 / 4, **display OFF** | 107 / 307 frames/s (107 / 307 KiB/s each way) |
 | 2026-10-29 | ICMP ping laptop -> ESP32 (STA, power-save off), 20 pings | min 47 / avg 136 / max 502 ms (router: 2 ms) |
 | | WiFi round-trip latency (min/avg/p95) | |
 | | TCP throughput | |
@@ -35,8 +40,8 @@
 
 ## Open questions
 - **mDNS:** board starts mDNS (screen shows `wdbg.local`), but Windows `Resolve-DnsName wdbg.local` fails. Windows mDNS is enabled and the firewall allows mDNS-In on Public. pktmon capture at the NIC (before the firewall): laptop sent 40 mDNS queries for wdbg.local in 5 s and received **0 mDNS packets from any device**. So the reply never reaches the laptop: the router is not delivering multicast to WiFi clients, or the board never sees the query. Windows is not the cause. Workaround: use the IP shown on screen.
-- **High ICMP latency (47-500 ms)** to the ESP32 while the router answers in 2 ms. Power-save is confirmed off (`STA.cpp:122` applies `WIFI_PS_NONE` at STA start). Measure with TCP in Phase 2 before optimising.
-- **Serial log over UART (CH343, COM16):** pyserial can't pulse EN (RTS) on this Windows driver; esptool can. Pressing RST while a monitor held the port gave `boot:0x0 DOWNLOAD`. Need a reliable way to watch the boot log.
+- **RGB LCD vs WiFi (BLOCKER):** with the display running, WiFi latency/throughput is 25-40x worse (see Measurements). Cause proven by A/B; exact mechanism not yet proven. Suspected: PSRAM bus contention between the LCD's continuous framebuffer DMA (~24 MB/s) and WiFi/lwIP buffers, which the precompiled Arduino sdkconfig allows in PSRAM (`CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=1`).
+- **Serial/flash over UART (CH343, COM16):** auto-reset into the bootloader does not work on this port from this laptop (esptool: "No serial data received"). Flashing needs manual BOOT+RST; after flashing press RST. Listening to the log works if nothing toggles DTR/RTS. Flashing over the native USB port does auto-reset fine.
 - Does the Sensor AD input (GPIO6) have an RC filter/divider on the Waveshare schematic?
 - CH422G: init is now done at boot (see Decisions). EXIO3 = LCD_RST comes from community drivers for this board family (wiki gives EXIO1/2/4/5 only). Confirm in the schematic.
 - Is the RA8D1 debug port ADIv6 (DPv3)? Which host tools support RA8D1 / Cortex-M85 today?

@@ -3,6 +3,11 @@
 
 #define WDBG_FW_VERSION      "0.2.0"
 
+// 0 = don't start the LCD/LVGL (diagnostics: e.g. WiFi A/B test without PSRAM framebuffer traffic).
+#ifndef WDBG_DISPLAY
+#define WDBG_DISPLAY         1
+#endif
+
 // Network (used from Phase 1/2)
 #define WDBG_MDNS_NAME       "wdbg"     // -> wdbg.local
 #define WDBG_TCP_PORT        4242       // our choice; Phase 5 may change it to match the host tool

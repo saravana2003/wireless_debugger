@@ -24,15 +24,22 @@ void setup() {
     // Order matters: release LCD reset (backlight off) -> draw first frame -> backlight on ->
     // free the I2C bus so GPIO9 is untouched until the bus arbiter exists.
     const bool exp_ok = ch422g::begin();
+#if WDBG_DISPLAY
     if (!ui::init()) {
         ESP_LOGE(TAG, "UI init failed");
     }
     if (exp_ok) {
         ch422g::set_backlight(true);
     }
+#else
+    (void)exp_ok;
+    ESP_LOGW(TAG, "display disabled (WDBG_DISPLAY=0)");
+#endif
     ch422g::end();
 
+#if WDBG_DISPLAY
     ui::start_task();
+#endif
     net::wifi_start();
     net::tcp_start(echo_handler);
     ESP_LOGI(TAG, "boot done, free heap %u, free PSRAM %u",
