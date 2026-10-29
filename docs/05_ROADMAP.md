@@ -59,7 +59,8 @@ tests pass.
 
 ## Phase 6: Performance pass
 - [ ] Support `DAP_Info` packet count > 1 (pipelining), tune packet size, socket buffers, task priorities.
-- [ ] Optimize the SWD bit loop (dedicated GPIO / tighter loop). Target ≥ 2–4 MHz if feasible.
+- [ ] Optimize the SWD bit loop (dedicated GPIO / tighter loop). Target ≥ 2–4 MHz if feasible. (Phase 3 baseline:
+      1.28 MHz max with GPIO registers; delay model inaccurate at small delays, see PROGRESS open questions.)
 - [ ] Record before/after numbers in PROGRESS.md.
 
 ## Phase 7: UI dashboard + touch via the arbiter
