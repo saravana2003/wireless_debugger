@@ -15,8 +15,10 @@ https://files.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3/ESP32-S3-Touch-LCD-4.3-S
   I2C header. Touch INT = GPIO4.
   - `LGFX_Config.h` uses GT911 address **0x14**. The wiki mentions 0x5D. The GT911 address depends on the INT level at
     reset. Keep 0x14 (it worked before) and fall back to 0x5D if it doesn't respond.
-  - The CH422G drives things like LCD reset, backlight, SD CS and USB_SEL. Check the schematic/wiki before relying on
-    defaults.
+  - The CH422G drives EXIO1 = touch reset, EXIO2 = backlight (DISP), EXIO3 = LCD reset, EXIO4 = SD CS, EXIO5 = USB_SEL
+    (wiki for 1/2/4/5; EXIO3 from community drivers, confirm in schematic). It has no register pointer: each command is its
+    own 7-bit I2C address with one data byte: **0x24** WR_SET (bit0 IO_OE = outputs), **0x38** WR_IO (IO0-7 levels).
+    Source: Espressif `esp_io_expander_ch422g.c` (Apache-2.0). Implemented in `lib/ch422g`, used once at boot.
 - **UART0:** TX = GPIO43, RX = GPIO44, through a CH343P → the USB-C port labelled **UART**. Use this port for
   **flashing and the serial monitor**.
 - **USB (native):** GPIO19/20, switched with **CAN** (FSUSB42) via USB_SEL. Not used by us.
