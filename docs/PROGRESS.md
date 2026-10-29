@@ -3,7 +3,7 @@
 > Update this file at the end of every phase (and whenever a decision is made). Newest entries at the top of each section.
 
 ## Current status
-- **Phase:** 1 (WiFi & status) in progress. Phase 0 done.
+- **Phase:** 2 (TCP server + raw framing + host test client) in progress. Phase 1 accepted with mDNS as an open item (use the IP).
 - **Hardware in hand:** Waveshare ESP32-S3-LCD-4.3 only. EK-RA8D1 is **not available** (all PENDING-HW items blocked).
 
 ## Phase log
@@ -34,7 +34,7 @@
 | | Max SWCLK achieved | |
 
 ## Open questions
-- **mDNS:** board starts mDNS (screen shows `wdbg.local`), but Windows `Resolve-DnsName wdbg.local` fails. Windows mDNS is enabled and the firewall allows mDNS-In on Public. No other device on the LAN answered an mDNS service query either, which hints at the router (Airtel) not forwarding multicast between WiFi clients. Not proven. Workaround: use the IP shown on screen.
+- **mDNS:** board starts mDNS (screen shows `wdbg.local`), but Windows `Resolve-DnsName wdbg.local` fails. Windows mDNS is enabled and the firewall allows mDNS-In on Public. pktmon capture at the NIC (before the firewall): laptop sent 40 mDNS queries for wdbg.local in 5 s and received **0 mDNS packets from any device**. So the reply never reaches the laptop: the router is not delivering multicast to WiFi clients, or the board never sees the query. Windows is not the cause. Workaround: use the IP shown on screen.
 - **High ICMP latency (47-500 ms)** to the ESP32 while the router answers in 2 ms. Power-save is confirmed off (`STA.cpp:122` applies `WIFI_PS_NONE` at STA start). Measure with TCP in Phase 2 before optimising.
 - **Serial log over UART (CH343, COM16):** pyserial can't pulse EN (RTS) on this Windows driver; esptool can. Pressing RST while a monitor held the port gave `boot:0x0 DOWNLOAD`. Need a reliable way to watch the boot log.
 - Does the Sensor AD input (GPIO6) have an RC filter/divider on the Waveshare schematic?

@@ -11,6 +11,7 @@
 #include <LovyanGFX.hpp>  // listed here so the PlatformIO LDF links LovyanGFX into this lib
 #include "LGFX_Config.h"
 #include "app_config.h"
+#include "stats.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "ui";
@@ -35,6 +36,7 @@ SemaphoreHandle_t s_mutex = nullptr;
 
 lv_obj_t *s_wifi_val = nullptr;
 lv_obj_t *s_ip_val = nullptr;
+lv_obj_t *s_client_val = nullptr;
 
 void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     const int32_t w = area->x2 - area->x1 + 1;
@@ -72,8 +74,33 @@ void build_boot_screen() {
 
     s_wifi_val = add_row(scr, "WiFi:", 130);
     s_ip_val = add_row(scr, "IP:", 170);
-    add_row(scr, "Client:", 210);
+    s_client_val = add_row(scr, "Client:", 210);
     add_row(scr, "Target:", 250);
+}
+
+// Client row: peer address plus frame/byte rates since the previous refresh.
+void refresh_client() {
+    static uint32_t last_ms = 0, last_frames = 0, last_bytes = 0;
+    const uint32_t now = millis();
+    const uint32_t frames = stats::g.rx_frames.load(std::memory_order_relaxed);
+    const uint32_t bytes = stats::g.rx_bytes.load(std::memory_order_relaxed) +
+                           stats::g.tx_bytes.load(std::memory_order_relaxed);
+    const uint32_t dt = now - last_ms;
+    const uint32_t fps = dt ? (frames - last_frames) * 1000u / dt : 0;
+    const uint32_t kbps = dt ? (bytes - last_bytes) / dt : 0;  // bytes/ms == kB/s
+    last_ms = now;
+    last_frames = frames;
+    last_bytes = bytes;
+
+    const uint32_t ip = stats::g.client_ip.load(std::memory_order_relaxed);
+    const uint32_t errs = stats::g.errors.load(std::memory_order_relaxed);
+    if (ip == 0) {
+        lv_label_set_text_fmt(s_client_val, "--   (errors %u)", (unsigned)errs);
+        return;
+    }
+    const uint8_t *b = reinterpret_cast<const uint8_t *>(&ip);  // network byte order
+    lv_label_set_text_fmt(s_client_val, "%u.%u.%u.%u   %u pkt/s   %u kB/s   errors %u",
+                          b[0], b[1], b[2], b[3], (unsigned)fps, (unsigned)kbps, (unsigned)errs);
 }
 
 // Runs in the ui task (LVGL timer): pull the WiFi snapshot, update labels.
@@ -96,8 +123,9 @@ void refresh_status(lv_timer_t *) {
             break;
     }
     if (st.mode == net::WifiMode::Sta || st.mode == net::WifiMode::Ap) {
-        lv_label_set_text_fmt(s_ip_val, "%s%s", st.ip, st.mdns ? "   " WDBG_MDNS_NAME ".local" : "");
+        lv_label_set_text_fmt(s_ip_val, "%s:%d%s", st.ip, WDBG_TCP_PORT, st.mdns ? "   " WDBG_MDNS_NAME ".local" : "");
     }
+    refresh_client();
 }
 
 void ui_task(void *) {

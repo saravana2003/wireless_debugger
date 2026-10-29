@@ -1,12 +1,14 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.1.0"
+#define WDBG_FW_VERSION      "0.2.0"
 
 // Network (used from Phase 1/2)
 #define WDBG_MDNS_NAME       "wdbg"     // -> wdbg.local
 #define WDBG_TCP_PORT        4242       // our choice; Phase 5 may change it to match the host tool
 #define WDBG_STA_TIMEOUT_MS  10000      // fall back to AP mode after this
+#define WDBG_FRAME_MAX       4096       // max payload of one TCP frame (bytes)
+#define WDBG_RX_TIMEOUT_MS   2000       // drop the client if a frame stalls half-way
 
 // CMSIS-DAP (used from Phase 4; reported via DAP_Info)
 #define WDBG_DAP_PACKET_SIZE   1024
