@@ -1,7 +1,7 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.2.1"
+#define WDBG_FW_VERSION      "0.3.0"
 
 // 0 = don't start the LCD/LVGL (diagnostics: e.g. WiFi A/B test without PSRAM framebuffer traffic).
 #ifndef WDBG_DISPLAY

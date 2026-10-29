@@ -2,7 +2,7 @@
 
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_rgb.h>
-#include <esp_log.h>
+#include "wdbg_log.h"
 
 #include "app_config.h"
 #include "board_pins.h"

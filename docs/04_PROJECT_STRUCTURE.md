@@ -87,5 +87,6 @@ Notes:
   | ui_task (LVGL `lv_timer_handler`) | 1 | low | ~30 fps is enough |
 - Inter-task: FreeRTOS queues of fixed-size packet buffers (allocated once at boot, PSRAM is ok for UI, but
   DAP buffers in internal RAM).
-- Every module logs with `static const char *TAG = "<mod>";`.
+- Every module logs with `static const char *TAG = "<mod>";` and includes **`wdbg_log.h`, never `<esp_log.h>`**
+  directly: the precompiled IDF compiles INFO/WARN out of plain `esp_log.h` (max level = error).
 - `.gitignore` must include `.pio/`, `include/secrets.h`, `.vscode/c_cpp_properties.json`, `.vscode/launch.json`.

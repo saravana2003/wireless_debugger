@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_heap_caps.h>
-#include <esp_log.h>
+#include "wdbg_log.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -11,6 +11,7 @@
 #include "app_config.h"
 #include "lcd_rgb.h"
 #include "stats.h"
+#include "swd_phy.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "ui";
@@ -35,6 +36,7 @@ SemaphoreHandle_t s_mutex = nullptr;
 lv_obj_t *s_wifi_val = nullptr;
 lv_obj_t *s_ip_val = nullptr;
 lv_obj_t *s_client_val = nullptr;
+lv_obj_t *s_swd_val = nullptr;
 
 void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     // LV_COLOR_16_SWAP=0 -> native RGB565, which is what the esp_lcd frame buffer holds.
@@ -72,6 +74,7 @@ void build_boot_screen() {
     s_ip_val = add_row(scr, "IP:", 170);
     s_client_val = add_row(scr, "Client:", 210);
     add_row(scr, "Target:", 250);
+    s_swd_val = add_row(scr, "SWD:", 290);
 }
 
 // Client row: peer address plus frame/byte rates since the previous refresh.
@@ -99,6 +102,19 @@ void refresh_client() {
                           b[0], b[1], b[2], b[3], (unsigned)fps, (unsigned)kbps, (unsigned)errs);
 }
 
+// SWD row: boot self-test result (Phase 3).
+void refresh_swd() {
+    const swd::SelfTest t = swd::last_self_test();
+    if (!t.ran) {
+        lv_label_set_text(s_swd_val, "self-test not run");
+        return;
+    }
+    lv_label_set_text_fmt(s_swd_val, "max %u.%02u MHz   set %u kHz -> %u kHz   DPIDR ack 0x%X%s",
+                          (unsigned)(t.max_hz / 1000000), (unsigned)(t.max_hz / 10000 % 100),
+                          (unsigned)(t.set_hz / 1000), (unsigned)(t.measured_hz / 1000), t.dpidr_ack,
+                          t.dpidr_ack == swd::ACK_OK ? "" : " (no target)");
+}
+
 // Runs in the ui task (LVGL timer): pull the WiFi snapshot, update labels.
 void refresh_status(lv_timer_t *) {
     const net::WifiStatus st = net::wifi_status();
@@ -122,6 +138,7 @@ void refresh_status(lv_timer_t *) {
         lv_label_set_text_fmt(s_ip_val, "%s:%d%s", st.ip, WDBG_TCP_PORT, st.mdns ? "   " WDBG_MDNS_NAME ".local" : "");
     }
     refresh_client();
+    refresh_swd();
 }
 
 void ui_task(void *) {

@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <esp_log.h>
+#include "wdbg_log.h"
 
 #include "app_config.h"
 #include "board_pins.h"

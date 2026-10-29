@@ -34,8 +34,10 @@ https://files.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3/ESP32-S3-Touch-LCD-4.3-S
 | nRESET | not wired | n/a | 10, optional. Use software reset (AIRCR.SYSRESETREQ) instead |
 | VTref | not wired | n/a | 1. Both boards are 3.3 V logic |
 
-**TODO (verify in schematic before Phase 3 is closed):** check whether the Sensor AD input (GPIO6) has a series
-resistor, divider or RC filter that would slow down a bidirectional signal. Record the finding in PROGRESS.md.
+**Verified in the schematic (2026-10-29):** GPIO6 is a direct trace: ESP32-S3-WROOM module pin 6 (IO6) -> net "AD" ->
+**J6 pin 3** ("Sensor AD", 3-pin header). No series resistor, no RC filter, no divider, and **no pull-up** (firmware
+enables the internal pull-up on SWDIO). J6 pinout: **1 = 3V3 (do NOT wire to the target), 2 = GND, 3 = AD (SWDIO)**,
+so J6 pin 2 is a convenient GND for the SWD cable. The I2C lines have 4.7 kOhm pull-ups to 3V3 (R99/R101).
 
 ## 4. The GPIO9 sharing problem and the solution
 GPIO9 is both I2C SCL (touch/CH422G) and SWCLK.

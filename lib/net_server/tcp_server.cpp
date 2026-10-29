@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <errno.h>
-#include <esp_log.h>
+#include "wdbg_log.h"
 #include <lwip/sockets.h>
 
 #include "app_config.h"

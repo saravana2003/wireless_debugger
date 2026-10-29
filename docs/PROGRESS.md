@@ -27,6 +27,7 @@
 | 2026-10-29 | CH422G driven once at boot (LCD_RST released, touch held in reset, backlight on after first frame), then `Wire.end()` | Known state for the panel; GPIO9 free until the bus arbiter exists |
 | 2026-10-29 | Git: `main` = baseline, work on `dev` (github.com/saravana2003/wireless_debugger) | Saro's request |
 | 2026-10-29 | Display: LovyanGFX -> ESP-IDF `esp_lcd` RGB driver, bounce buffers, LVGL draw buffers in internal RAM, LV_COLOR_16_SWAP=0 | LovyanGFX+RGB made WiFi 25-40x slower; esp_lcd bounce buffers keep LCD DMA off the PSRAM bus |
+| 2026-10-29 | GPIO6 OK for SWDIO: direct trace to J6 pin 3, no R/C (schematic checked), internal pull-up enabled | 02_HARDWARE §3 TODO closed |
 | (pending) | Host tool choice (OpenOCD TCP / pyOCD plugin / elaphureLink / USB-IP) | Decide in Phase 5 |
 
 ## Measurements
@@ -47,7 +48,6 @@
 - **mDNS:** board starts mDNS (screen shows `wdbg.local`), but Windows `Resolve-DnsName wdbg.local` fails. Windows mDNS is enabled and the firewall allows mDNS-In on Public. pktmon capture at the NIC (before the firewall): laptop sent 40 mDNS queries for wdbg.local in 5 s and received **0 mDNS packets from any device**. So the reply never reaches the laptop: the router is not delivering multicast to WiFi clients, or the board never sees the query. Windows is not the cause. Workaround: use the IP shown on screen.
 - **RGB LCD vs WiFi (mostly solved):** LovyanGFX RGB made WiFi 25-40x worse. esp_lcd + bounce buffers + `bb_invalidate_cache` brought it to ~2x of display-off. That the cache flag helped so much supports the theory: frame-buffer reads evicted the cache that WiFi/lwIP buffers in PSRAM (`CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=1`) rely on. Phase 6 ideas: bigger bounce buffers, keeping WiFi buffers in internal RAM (custom sdkconfig).
 - **Serial/flash over UART (CH343, COM16):** auto-reset into the bootloader does not work on this port from this laptop (esptool: "No serial data received"). Flashing needs manual BOOT+RST; after flashing press RST. Listening to the log works if nothing toggles DTR/RTS. Flashing over the native USB port does auto-reset fine.
-- Does the Sensor AD input (GPIO6) have an RC filter/divider on the Waveshare schematic?
 - CH422G: init is now done at boot (see Decisions). EXIO3 = LCD_RST comes from community drivers for this board family (wiki gives EXIO1/2/4/5 only). Confirm in the schematic.
 - Is the RA8D1 debug port ADIv6 (DPv3)? Which host tools support RA8D1 / Cortex-M85 today?
 - Logic analyzer: Saro has one but not at hand. Not required before RA8 bring-up (Phase 3 timing is measured with the CPU cycle counter).

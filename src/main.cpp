@@ -1,9 +1,10 @@
 // Wireless Debugger: thin entry point. Init modules, start tasks.
 #include <Arduino.h>
-#include <esp_log.h>
+#include "wdbg_log.h"
 
 #include "app_config.h"
 #include "ch422g.h"
+#include "swd_phy.h"
 #include "ui.h"
 #include "tcp_server.h"
 #include "wifi_mgr.h"
@@ -36,6 +37,11 @@ void setup() {
     ESP_LOGW(TAG, "display disabled (WDBG_DISPLAY=0)");
 #endif
     ch422g::end();
+
+    // SWD: register the GPIO9 arbiter hooks, then measure SWCLK (safe with nothing connected:
+    // SDA idles high, so the I2C devices on GPIO9 never see a START).
+    swd::init();
+    swd::self_test();
 
 #if WDBG_DISPLAY
     ui::start_task();
