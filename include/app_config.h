@@ -1,11 +1,18 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.2.0"
+#define WDBG_FW_VERSION      "0.2.1"
 
 // 0 = don't start the LCD/LVGL (diagnostics: e.g. WiFi A/B test without PSRAM framebuffer traffic).
 #ifndef WDBG_DISPLAY
 #define WDBG_DISPLAY         1
+#endif
+
+// RGB LCD (esp_lcd). Bounce buffers: N lines x 2 in internal RAM, refilled by the CPU from the
+// PSRAM frame buffer; 0 = LCD DMA reads PSRAM directly. 800*480 must be divisible by 800*N.
+#define WDBG_LCD_PCLK_HZ       12000000
+#ifndef WDBG_LCD_BOUNCE_LINES
+#define WDBG_LCD_BOUNCE_LINES  10
 #endif
 
 // Network (used from Phase 1/2)

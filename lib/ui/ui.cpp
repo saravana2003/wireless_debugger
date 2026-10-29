@@ -8,9 +8,8 @@
 #include <freertos/task.h>
 #include <lvgl.h>
 
-#include <LovyanGFX.hpp>  // listed here so the PlatformIO LDF links LovyanGFX into this lib
-#include "LGFX_Config.h"
 #include "app_config.h"
+#include "lcd_rgb.h"
 #include "stats.h"
 #include "wifi_mgr.h"
 
@@ -23,13 +22,12 @@ void unlock();
 
 namespace {
 
-constexpr int SCREEN_W = 800;
-constexpr int SCREEN_H = 480;
-constexpr int BUF_LINES = 48;           // LVGL draw buffer height (x2 buffers, in PSRAM)
+constexpr int SCREEN_W = ui::lcd::WIDTH;
+constexpr int SCREEN_H = ui::lcd::HEIGHT;
+constexpr int BUF_LINES = 20;           // LVGL draw buffer height (x2, internal RAM: keeps PSRAM quiet)
 constexpr uint32_t TASK_PERIOD_MS = 10;
 constexpr uint32_t STATUS_REFRESH_MS = 500;
 
-LGFX s_lcd;
 lv_disp_draw_buf_t s_draw_buf;
 lv_disp_drv_t s_disp_drv;
 SemaphoreHandle_t s_mutex = nullptr;
@@ -39,10 +37,8 @@ lv_obj_t *s_ip_val = nullptr;
 lv_obj_t *s_client_val = nullptr;
 
 void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
-    const int32_t w = area->x2 - area->x1 + 1;
-    const int32_t h = area->y2 - area->y1 + 1;
-    // LV_COLOR_16_SWAP=1 -> LVGL pixels are byte-swapped RGB565.
-    s_lcd.pushImage(area->x1, area->y1, w, h, reinterpret_cast<lgfx::swap565_t *>(&color_p->full));
+    // LV_COLOR_16_SWAP=0 -> native RGB565, which is what the esp_lcd frame buffer holds.
+    ui::lcd::draw(area->x1, area->y1, area->x2, area->y2, &color_p->full);
     lv_disp_flush_ready(drv);
 }
 
@@ -148,17 +144,16 @@ bool init() {
         return false;
     }
 
-    if (!s_lcd.init()) {
+    if (!ui::lcd::init()) {  // frame buffer starts zeroed (black)
         ESP_LOGE(TAG, "LCD init failed");
         return false;
     }
-    s_lcd.fillScreen(TFT_BLACK);
 
     lv_init();
 
     const size_t buf_px = SCREEN_W * BUF_LINES;
-    auto *buf1 = static_cast<lv_color_t *>(heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_SPIRAM));
-    auto *buf2 = static_cast<lv_color_t *>(heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_SPIRAM));
+    auto *buf1 = static_cast<lv_color_t *>(heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    auto *buf2 = static_cast<lv_color_t *>(heap_caps_malloc(buf_px * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     if (!buf1 || !buf2) {
         ESP_LOGE(TAG, "draw buffer alloc failed");
         return false;

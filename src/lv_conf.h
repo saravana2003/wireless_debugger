@@ -16,7 +16,7 @@
    COLOR SETTINGS
  *=======================*/
 #define LV_COLOR_DEPTH     16   /* RGB565 panel */
-#define LV_COLOR_16_SWAP   1   /* Byte-swapped RGB565; flush pushes it as lgfx::swap565_t */
+#define LV_COLOR_16_SWAP   0   /* esp_lcd RGB frame buffer is native-order RGB565 */
 
 /*=======================
    MEMORY SETTINGS
