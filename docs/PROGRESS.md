@@ -3,12 +3,13 @@
 > Update this file at the end of every phase (and whenever a decision is made). Newest entries at the top of each section.
 
 ## Current status
-- **Phase:** 0 (code done, `pio run` passes; **waiting for Saro's on-board test**: upload + screen check)
+- **Phase:** 1 (WiFi & status) in progress. Phase 0 done.
 - **Hardware in hand:** Waveshare ESP32-S3-LCD-4.3 only. EK-RA8D1 is **not available** (all PENDING-HW items blocked).
 
 ## Phase log
 | Date | Phase | Result | Notes |
 |---|---|---|---|
+| 2026-10-29 | 0 | **Done** | Flashed via native USB (COM15). Saro confirmed: backlight on, boot screen readable, colours correct (LV_COLOR_16_SWAP=1 + swap565_t is right) |
 | 2026-10-29 | 0 | Build OK | Skeleton, board_pins/app_config/secrets template, LGFX (touch removed), LVGL boot screen, CH422G boot init. Flash 27.6 %, RAM 8.1 %. Not yet flashed (board not connected) |
 | 2026-10-29 | Planning | Docs created | Goal, hardware, protocols, structure, roadmap written |
 
@@ -33,7 +34,6 @@
 ## Open questions
 - Does the Sensor AD input (GPIO6) have an RC filter/divider on the Waveshare schematic?
 - CH422G: init is now done at boot (see Decisions). EXIO3 = LCD_RST comes from community drivers for this board family (wiki gives EXIO1/2/4/5 only). Confirm in the schematic.
-- `lv_conf.h` has `LV_COLOR_16_SWAP 1` (kept from the old project; flush uses `lgfx::swap565_t` to match). If colours look wrong on screen, this is the first suspect.
 - Is the RA8D1 debug port ADIv6 (DPv3)? Which host tools support RA8D1 / Cortex-M85 today?
 - Logic analyzer: Saro has one but not at hand. Not required before RA8 bring-up (Phase 3 timing is measured with the CPU cycle counter).
 
