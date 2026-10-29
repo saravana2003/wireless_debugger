@@ -3,13 +3,13 @@
 > Update this file at the end of every phase (and whenever a decision is made). Newest entries at the top of each section.
 
 ## Current status
-- **Phase:** 4 **done** pending a final on-board check of the IDR fix (see log). Next: Phase 5 (host tool decision).
+- **Phase:** 4 **done**. Next: Phase 5 (host tool research + decision with Saro). Board runs the `esp32_sim` build.
 - **Hardware in hand:** Waveshare ESP32-S3-LCD-4.3 only. EK-RA8D1 is **not available** (all PENDING-HW items blocked).
 
 ## Phase log
 | Date | Phase | Result | Notes |
 |---|---|---|---|
-| 2026-10-29 | 4 | **Done** | ARM DAP.c V2.1.2 ported (2 marked changes) + our DAP_config.h/glue on top of swd_engine; swd_sim (DP + MEM-AP + 64 KB RAM); esp32_sim env; 24 native tests. Over WiFi against SIM: info, connect (DPIDR 0x0FA01001), write32/read32/dump round-trip, unmapped read -> FAULT. Bug found on HW: sim returned 0xFC for AP IDR (constant name shadowing), fixed + test added |
+| 2026-10-29 | 4 | **Done** | ARM DAP.c V2.1.2 ported (2 marked changes) + our DAP_config.h/glue on top of swd_engine; swd_sim (DP + MEM-AP + 64 KB RAM); esp32_sim env; 24 native tests. Over WiFi against SIM: info, connect (DPIDR 0x0FA01001), write32/read32/dump round-trip, unmapped read -> FAULT. Bug found on HW: sim returned 0xFC for AP IDR (constant name shadowing), fixed + test added; re-verified on HW 2026-10-30: IDR 0x24770011 (MEM-AP), last RAM word 0x2000FFFC round-trips |
 | 2026-10-29 | 3 | **Done** | swd_engine (template, 12 native tests incl. a mutation check), ESP32 pin layer, bus_arbiter, boot self-test shown on screen. GPIO6 checked in schematic. Fixed: INFO/WARN logs were compiled out in modules that included esp_log.h directly (new `wdbg_log.h`) |
 | 2026-10-29 | 2 | **Done** | `bb_invalidate_cache` on: avg latency 77 -> 14 ms, p95 166 -> 37 ms, max 4359 -> 57 ms; 66 / 212 frames/s (window 1 / 4). Boot log clean. Screen confirmed fine by Saro |
 | 2026-10-29 | 2 | Display driver swap | LovyanGFX replaced by ESP-IDF esp_lcd RGB driver with bounce buffers (Saro's call: he saw the same issue before, lowering pclk didn't help). ~18x throughput vs LovyanGFX, still ~2x below display-off |
