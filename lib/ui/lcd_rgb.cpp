@@ -39,6 +39,12 @@ bool init() {
     cfg.bounce_buffer_size_px = WIDTH * WDBG_LCD_BOUNCE_LINES;  // 0 = DMA straight from PSRAM
     cfg.dma_burst_size = 64;
     cfg.flags.fb_in_psram = 1;
+    // Drop frame-buffer lines from the cache after each bounce refill, so the ~24 MB/s of pixel
+    // reads don't evict everything else (e.g. WiFi/lwIP buffers that live in PSRAM).
+    // IDF warns this is unsafe if the frame buffer is written from another core: init() runs on
+    // core 1 (so the bounce ISR does too) and draw() is only called from the ui task, pinned to
+    // core 1. Keep it that way.
+    cfg.flags.bb_invalidate_cache = (WDBG_LCD_BOUNCE_LINES > 0);
 
     cfg.hsync_gpio_num = pins::LCD_HSYNC;
     cfg.vsync_gpio_num = pins::LCD_VSYNC;
