@@ -5,6 +5,7 @@
 #include "app_config.h"
 #include "ch422g.h"
 #include "ui.h"
+#include "wifi_mgr.h"
 
 static const char *TAG = "main";
 
@@ -24,6 +25,7 @@ void setup() {
     ch422g::end();
 
     ui::start_task();
+    net::wifi_start();
     ESP_LOGI(TAG, "boot done, free heap %u, free PSRAM %u",
              (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getFreePsram());
 }

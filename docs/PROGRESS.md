@@ -9,6 +9,7 @@
 ## Phase log
 | Date | Phase | Result | Notes |
 |---|---|---|---|
+| 2026-10-29 | 1 | Partial | STA joins home WiFi (192.168.1.61), screen shows mode/SSID/RSSI/IP, board reports mDNS started. **`wdbg.local` does not resolve on the laptop** (see Open questions). Ping by IP OK, but slow: min 47 / avg 136 / max 502 ms (router itself: 2 ms) |
 | 2026-10-29 | 0 | **Done** | Flashed via native USB (COM15). Saro confirmed: backlight on, boot screen readable, colours correct (LV_COLOR_16_SWAP=1 + swap565_t is right) |
 | 2026-10-29 | 0 | Build OK | Skeleton, board_pins/app_config/secrets template, LGFX (touch removed), LVGL boot screen, CH422G boot init. Flash 27.6 %, RAM 8.1 %. Not yet flashed (board not connected) |
 | 2026-10-29 | Planning | Docs created | Goal, hardware, protocols, structure, roadmap written |
@@ -27,11 +28,15 @@
 ## Measurements
 | Date | What | Value |
 |---|---|---|
+| 2026-10-29 | ICMP ping laptop -> ESP32 (STA, power-save off), 20 pings | min 47 / avg 136 / max 502 ms (router: 2 ms) |
 | | WiFi round-trip latency (min/avg/p95) | |
 | | TCP throughput | |
 | | Max SWCLK achieved | |
 
 ## Open questions
+- **mDNS:** board starts mDNS (screen shows `wdbg.local`), but Windows `Resolve-DnsName wdbg.local` fails. Windows mDNS is enabled and the firewall allows mDNS-In on Public. No other device on the LAN answered an mDNS service query either, which hints at the router (Airtel) not forwarding multicast between WiFi clients. Not proven. Workaround: use the IP shown on screen.
+- **High ICMP latency (47-500 ms)** to the ESP32 while the router answers in 2 ms. Power-save is confirmed off (`STA.cpp:122` applies `WIFI_PS_NONE` at STA start). Measure with TCP in Phase 2 before optimising.
+- **Serial log over UART (CH343, COM16):** pyserial can't pulse EN (RTS) on this Windows driver; esptool can. Pressing RST while a monitor held the port gave `boot:0x0 DOWNLOAD`. Need a reliable way to watch the boot log.
 - Does the Sensor AD input (GPIO6) have an RC filter/divider on the Waveshare schematic?
 - CH422G: init is now done at boot (see Decisions). EXIO3 = LCD_RST comes from community drivers for this board family (wiki gives EXIO1/2/4/5 only). Confirm in the schematic.
 - Is the RA8D1 debug port ADIv6 (DPv3)? Which host tools support RA8D1 / Cortex-M85 today?

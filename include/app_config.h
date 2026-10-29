@@ -1,7 +1,7 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.0.1"
+#define WDBG_FW_VERSION      "0.1.0"
 
 // Network (used from Phase 1/2)
 #define WDBG_MDNS_NAME       "wdbg"     // -> wdbg.local

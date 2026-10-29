@@ -11,6 +11,7 @@
 #include <LovyanGFX.hpp>  // listed here so the PlatformIO LDF links LovyanGFX into this lib
 #include "LGFX_Config.h"
 #include "app_config.h"
+#include "wifi_mgr.h"
 
 static const char *TAG = "ui";
 
@@ -25,11 +26,15 @@ constexpr int SCREEN_W = 800;
 constexpr int SCREEN_H = 480;
 constexpr int BUF_LINES = 48;           // LVGL draw buffer height (x2 buffers, in PSRAM)
 constexpr uint32_t TASK_PERIOD_MS = 10;
+constexpr uint32_t STATUS_REFRESH_MS = 500;
 
 LGFX s_lcd;
 lv_disp_draw_buf_t s_draw_buf;
 lv_disp_drv_t s_disp_drv;
 SemaphoreHandle_t s_mutex = nullptr;
+
+lv_obj_t *s_wifi_val = nullptr;
+lv_obj_t *s_ip_val = nullptr;
 
 void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     const int32_t w = area->x2 - area->x1 + 1;
@@ -65,9 +70,34 @@ void build_boot_screen() {
     lv_obj_set_style_text_font(ver, &lv_font_montserrat_14, 0);
     lv_obj_set_pos(ver, 40, 62);
 
-    add_row(scr, "WiFi:", 130);
-    add_row(scr, "Client:", 170);
-    add_row(scr, "Target:", 210);
+    s_wifi_val = add_row(scr, "WiFi:", 130);
+    s_ip_val = add_row(scr, "IP:", 170);
+    add_row(scr, "Client:", 210);
+    add_row(scr, "Target:", 250);
+}
+
+// Runs in the ui task (LVGL timer): pull the WiFi snapshot, update labels.
+void refresh_status(lv_timer_t *) {
+    const net::WifiStatus st = net::wifi_status();
+    switch (st.mode) {
+        case net::WifiMode::Off:
+            lv_label_set_text(s_wifi_val, "--");
+            lv_label_set_text(s_ip_val, "--");
+            break;
+        case net::WifiMode::Connecting:
+            lv_label_set_text_fmt(s_wifi_val, "connecting to %s ...", st.ssid);
+            lv_label_set_text(s_ip_val, "--");
+            break;
+        case net::WifiMode::Sta:
+            lv_label_set_text_fmt(s_wifi_val, "STA   %s   %d dBm", st.ssid, st.rssi);
+            break;
+        case net::WifiMode::Ap:
+            lv_label_set_text_fmt(s_wifi_val, "AP   %s   (join this network)", st.ssid);
+            break;
+    }
+    if (st.mode == net::WifiMode::Sta || st.mode == net::WifiMode::Ap) {
+        lv_label_set_text_fmt(s_ip_val, "%s%s", st.ip, st.mdns ? "   " WDBG_MDNS_NAME ".local" : "");
+    }
 }
 
 void ui_task(void *) {
@@ -115,6 +145,7 @@ bool init() {
     lv_disp_drv_register(&s_disp_drv);
 
     build_boot_screen();
+    lv_timer_create(refresh_status, STATUS_REFRESH_MS, nullptr);
     lv_timer_handler();  // render the first frame before the backlight comes on
 
     ESP_LOGI(TAG, "init ok");
