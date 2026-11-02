@@ -4,6 +4,14 @@ The board already runs the right firmware: **`esp32-s3-waveshare-43` env, FW 0.7
 No reflash is needed before the first test. Everything here is **untested on real hardware**: this is the first time
 real SWD signals run. If a step fails, stop and record what you saw, rather than moving on.
 
+## 0. What to bring
+- ESP32 board + its USB-C cable (UART port); EK-RA8D1 + a Micro-USB cable (type-A to micro-B, one is in the kit, for J10)
+- **A 2 mm pitch jumper shunt for J9** (UM §4.3.2: the board's pin jumpers are 2 mm; common 2.54 mm shunts won't fit)
+- Wires for 3 connections. **J13's pitch isn't stated in the UM.** The Arm 10-pin Cortex debug connector is normally
+  1.27 mm, which normal 2.54 mm jumper wires won't fit: check by eye, and bring a 1.27 mm 10-pin cable/breakout if you
+  have one. Also check the ESP32 board's J6 and I2C header types by eye (not verified from the docs)
+- Logic analyzer + its leads; laptop
+
 ## 1. Set up the RA8 board (UM §5.2.2 "Debug In", see 02_HARDWARE.md §6)
 | Jumper | Setting | Why |
 |---|---|---|
