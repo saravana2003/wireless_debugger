@@ -45,14 +45,18 @@ GPIO9 is both I2C SCL (touch/CH422G) and SWCLK.
 - **Why it's safe electrically:** an I2C transaction only begins with a START (SDA falls while SCL is high). If SDA
   (GPIO8) is left idle-high while SWD toggles GPIO9, I2C devices see clock noise with no START and ignore it. The I2C
   pull-up on GPIO9 is fine for a push-pull SWCLK.
+- **The reverse direction is NOT automatically safe (found 2026-11-03):** the target sees I2C's SCL edges as SWCLK edges.
+  If SWDIO is high at that moment, the target reads a start bit and a request, gets a parity error, and stops answering
+  until the next line reset. So while a debugger is connected, the firmware **drives SWDIO low during I2C**: the edges
+  are then idle cycles. It also avoids I2C entirely unless the screen is touched, and for 200 ms after a host SWJ
+  sequence, which clock edges could corrupt. **Not yet tested on a real target.**
 - **Why it's still a software problem:** the I2C peripheral and the SWD code cannot both own GPIO9 at the same moment.
 - **Solution: `bus_arbiter` module (mutex + pin-mux switch).**
   - `arbiter_acquire(SWD)` → wait for any I2C transaction to finish, detach GPIO9 from the I2C peripheral
     (GPIO matrix), configure it as GPIO output for SWCLK.
   - `arbiter_acquire(I2C)` → park SWCLK low/idle, re-attach GPIO9 to the I2C peripheral.
   - SWD bursts are short (one CMSIS-DAP packet). The touch read (~20 Hz) slots in between.
-  - Touch must be read through our own path (not an LGFX auto-poll that bypasses the arbiter). Phase 1 runs
-    **display-only, touch disabled**. Touch comes back in Phase 7 via the arbiter.
+  - Touch is read through our own path (`lib/touch`), never an auto-poll that bypasses the arbiter.
   - Also take into account that the CH422G is on the same bus (backlight etc.): init it once at boot before SWD starts.
 
 ## 5. Power and ground

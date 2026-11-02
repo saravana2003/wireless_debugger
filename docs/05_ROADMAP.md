@@ -72,6 +72,7 @@ tests pass.
 ---
 
 ## Phase 8: Real target bring-up (PENDING-HW)
+**Step-by-step, with what each result means: `docs/RA8_BRINGUP.md`.** Phases 0-7 are done.
 - [ ] EK-RA8D1: **close J9**, keep J6/J8/J29 at defaults (02_HARDWARE §6). Power via J10 or J11. Wire GND, SWDIO,
       SWCLK to J13.
 - [ ] Read DPIDR, power up the debug domain, read the ROM table / CPUID. Note whether it's ADIv6.

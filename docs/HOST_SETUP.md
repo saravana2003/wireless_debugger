@@ -88,6 +88,8 @@ The simulated target has no real execution and no flash, so it can't test flashi
 
 After `monitor reset halt`, GDB may show the old PC: that's GDB's register cache. Run `maintenance flush register-cache`.
 
+First time with the real board: follow `docs/RA8_BRINGUP.md`.
+
 ## Status of this guide
 | Step | State |
 |---|---|

@@ -12,7 +12,8 @@ Wireless_debugger/
 │   ├── 04_PROJECT_STRUCTURE.md
 │   ├── 05_ROADMAP.md
 │   ├── PROGRESS.md               ← update after every phase
-│   ├── HOST_SETUP.md             ← created in Phase 5
+│   ├── HOST_SETUP.md             ← host tools, Cortex-Debug
+│   ├── RA8_BRINGUP.md            ← Phase 8 checklist: jumpers, wiring, first commands
 │   └── reference/                ← old-project files (read-only reference)
 ├── include/
 │   ├── board_pins.h              ← THE ONLY place with GPIO numbers

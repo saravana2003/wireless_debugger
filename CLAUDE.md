@@ -18,6 +18,8 @@ first, then the technical detail. Do one small, well-defined step at a time.
    4. `docs/04_PROJECT_STRUCTURE.md`: folder layout, modules, coding rules
    5. `docs/05_ROADMAP.md`: phases, tasks, and "definition of done" for each
    6. `docs/PROGRESS.md`: what has already been done (the source of truth for "where are we")
+   7. `docs/HOST_SETUP.md`: host tools (pyOCD + plugin, OpenOCD, Cortex-Debug)
+   8. `docs/RA8_BRINGUP.md`: Phase 8 checklist for the real board
 2. Look at `docs/reference/`. These are **known-good files from Saro's previous project** on this same board
    (LovyanGFX display/touch config, LVGL config, a SquareLine include shim). Use them as the starting point for
    the display. Don't rewrite them from scratch.
@@ -32,9 +34,9 @@ first, then the technical detail. Do one small, well-defined step at a time.
 ## 1. Ground rules (always follow these)
 
 ### Scope and honesty
-- **The RA8 board is NOT available right now.** All work happens on the ESP32 board alone. Anything that needs the
-  real target is marked **PENDING-HW** in the roadmap. Don't fake "it works on the target". Use the **simulated
-  target** (see roadmap Phase 4) for testing instead.
+- **Check `docs/PROGRESS.md` for whether the RA8 board is in hand** (expected 2026-11-03). Anything not yet run on the
+  real target is marked **PENDING-HW**. Don't fake "it works on the target". The **simulated target** (roadmap Phase 4)
+  stays available for testing without it.
 - **Never invent register addresses, IDs, protocol command codes, or pin numbers.** Take them from the ARM specs
   (ADIv5/ADIv6, CMSIS-DAP docs), the ESP-IDF/Arduino docs, the Waveshare wiki and schematic, or the RA8 PDFs.
   If you can't verify something, say so and put it in `PROGRESS.md` under *Open questions*.
