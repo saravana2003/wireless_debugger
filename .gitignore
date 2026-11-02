@@ -6,3 +6,4 @@
 include/secrets.h
 .host/
 __pycache__/
+*.egg-info/

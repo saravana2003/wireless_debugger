@@ -1,8 +1,0 @@
-pyproject.toml
-pyocd_wdbg/__init__.py
-pyocd_wdbg.egg-info/PKG-INFO
-pyocd_wdbg.egg-info/SOURCES.txt
-pyocd_wdbg.egg-info/dependency_links.txt
-pyocd_wdbg.egg-info/entry_points.txt
-pyocd_wdbg.egg-info/requires.txt
-pyocd_wdbg.egg-info/top_level.txt

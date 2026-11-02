@@ -1,2 +1,0 @@
-[pyocd.probe]
-wdbg = pyocd_wdbg:WdbgProbePlugin
