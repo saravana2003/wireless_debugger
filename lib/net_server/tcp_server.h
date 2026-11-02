@@ -13,7 +13,7 @@ namespace net {
 // Return 0 to send no response.
 using FrameHandler = size_t (*)(const uint8_t *req, size_t req_len, uint8_t *resp, size_t resp_cap);
 
-// Start the server task (core 0). Non-blocking.
+// Start the server task (core 1). Non-blocking.
 void tcp_start(FrameHandler handler);
 
 }  // namespace net

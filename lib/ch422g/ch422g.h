@@ -17,6 +17,9 @@ bool begin();
 // Switch the backlight (EXIO2) on/off. Requires begin().
 bool set_backlight(bool on);
 
+// Drive the GT911 reset line (EXIO1, active low). Requires begin().
+bool set_touch_reset(bool in_reset);
+
 // Release the I2C peripheral and pins (GPIO8/9).
 void end();
 

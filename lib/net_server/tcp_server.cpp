@@ -179,9 +179,10 @@ namespace net {
 
 void tcp_start(FrameHandler handler) {
     s_handler = handler;
-    // Priority 10: above the app tasks, below lwIP's tcpip task (18) and the WiFi driver (23),
-    // so packet delivery is never starved by frame processing.
-    xTaskCreatePinnedToCore(tcp_task, "tcp", 4096, nullptr, 10, nullptr, 0);
+    // Core 1, away from WiFi/lwIP on core 0: SWD bit-banging can't starve them, and WiFi interrupts
+    // don't stretch SWCLK. The dedicated GPIO bundle lives on this core too (swd_phy.cpp), because
+    // the handler runs here. Priority 10: above the UI task on the same core.
+    xTaskCreatePinnedToCore(tcp_task, "tcp", 4096, nullptr, 10, nullptr, 1);
 }
 
 }  // namespace net

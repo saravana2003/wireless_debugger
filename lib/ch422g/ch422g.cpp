@@ -1,3 +1,6 @@
+// ESP32 only. Not built for the native unit tests.
+#if defined(ESP_PLATFORM)
+
 #include "ch422g.h"
 
 #include <Arduino.h>
@@ -63,6 +66,14 @@ bool set_backlight(bool on) {
     return true;
 }
 
+bool set_touch_reset(bool in_reset) {
+    if (!s_active) return false;
+    const uint8_t next = in_reset ? (s_io & ~exio_bit(pins::EXIO_TP_RST)) : (s_io | exio_bit(pins::EXIO_TP_RST));
+    if (!write_reg(ADDR_WR_IO, next)) return false;
+    s_io = next;
+    return true;
+}
+
 void end() {
     if (!s_active) return;
     Wire.end();
@@ -70,3 +81,5 @@ void end() {
 }
 
 }  // namespace ch422g
+
+#endif  // ESP_PLATFORM

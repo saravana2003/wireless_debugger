@@ -354,6 +354,22 @@ void test_reset_catch_halts_at_reset() {
     TEST_ASSERT_EQUAL_HEX32(0xAB, core::reg(1));
 }
 
+void test_dpidr_seen_and_errors_counted() {
+    TEST_ASSERT_FALSE(dap::host_status().dpidr_valid);
+    connect_and_power_up();
+    TEST_ASSERT_TRUE(dap::host_status().dpidr_valid);
+    TEST_ASSERT_EQUAL_HEX32(swd_sim::DPIDR, dap::host_status().dpidr);
+    TEST_ASSERT_EQUAL_UINT32(0, dap::host_status().errors);
+
+    transfer({{AP_W_CSW, 0x12}, {AP_W_TAR, 0x10000000}, {AP_R_DRW, 0}});  // bus fault
+    TEST_ASSERT_EQUAL_UINT32(1, dap::host_status().errors);
+    dap::reset_errors();
+    TEST_ASSERT_EQUAL_UINT32(0, dap::host_status().errors);
+
+    run({ID_DAP_Disconnect});
+    TEST_ASSERT_FALSE(dap::host_status().dpidr_valid);
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_info);
@@ -376,5 +392,6 @@ int main(int, char **) {
     RUN_TEST(test_breakpoint_stops_running_core);
     RUN_TEST(test_breakpoint_at_current_pc_halts_without_executing);
     RUN_TEST(test_reset_catch_halts_at_reset);
+    RUN_TEST(test_dpidr_seen_and_errors_counted);
     return UNITY_END();
 }

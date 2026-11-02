@@ -20,6 +20,10 @@
 
 #include "swd_types.h"
 
+// The hot paths must be inlined into their caller: the ESP32 wrappers live in IRAM, so an outlined
+// template function would run from flash, and the flash cache competes with the LCD's PSRAM traffic.
+#define SWD_INLINE __attribute__((always_inline)) inline
+
 namespace swd {
 
 template <class Pins>
@@ -30,13 +34,13 @@ public:
     Config cfg;
 
     // Clock out `count` bits from `data` (LSB first), probe driving SWDIO. (DAP_SWJ_Sequence)
-    void sequence_out(uint32_t count, const uint8_t *data) {
+    SWD_INLINE void sequence_out(uint32_t count, const uint8_t *data) {
         p_.dio_drive(true);
         for (uint32_t i = 0; i < count; i++) write_bit((data[i >> 3] >> (i & 7)) & 1u);
     }
 
     // Clock in `count` bits into `data` (LSB first), SWDIO released. (DAP_SWD_Sequence input)
-    void sequence_in(uint32_t count, uint8_t *data) {
+    SWD_INLINE void sequence_in(uint32_t count, uint8_t *data) {
         p_.dio_drive(false);
         for (uint32_t i = 0; i < count; i++) {
             if ((i & 7) == 0) data[i >> 3] = 0;
@@ -45,7 +49,7 @@ public:
     }
 
     // Line reset: >= 50 cycles with SWDIO high, then 2 idle cycles (SWDIO low). We send 51 + 2.
-    void line_reset() {
+    SWD_INLINE void line_reset() {
         p_.dio_drive(true);
         for (int i = 0; i < 51; i++) write_bit(1);
         write_bit(0);
@@ -57,7 +61,7 @@ public:
     //   data: value to write, or where the read value goes (may be nullptr for reads).
     // Returns ACK_OK / ACK_WAIT / ACK_FAULT, the raw 3-bit ACK for a protocol error, or
     // ACK_PARITY_ERROR when read data fails its parity check.
-    uint8_t transfer(uint8_t req, uint32_t *data) {
+    SWD_INLINE uint8_t transfer(uint8_t req, uint32_t *data) {
         const bool rnw = (req >> 1) & 1u;
 
         // Request: Start(1) APnDP RnW A2 A3 Parity Stop(0) Park(1)
@@ -118,12 +122,12 @@ public:
         return ack;
     }
 
-    static uint32_t parity4(uint32_t v) {
+    static SWD_INLINE uint32_t parity4(uint32_t v) {
         v &= 0x0Fu;
         return (v ^ (v >> 1) ^ (v >> 2) ^ (v >> 3)) & 1u;
     }
 
-    static uint32_t parity32(uint32_t v) {
+    static SWD_INLINE uint32_t parity32(uint32_t v) {
         v ^= v >> 16;
         v ^= v >> 8;
         v ^= v >> 4;
@@ -135,7 +139,7 @@ public:
 private:
     Pins &p_;
 
-    inline void write_bit(uint32_t bit) {
+    SWD_INLINE void write_bit(uint32_t bit) {
         p_.dio_out(bit != 0);
         p_.clk_low();
         p_.half_period();
@@ -143,7 +147,7 @@ private:
         p_.half_period();
     }
 
-    inline uint32_t read_bit() {
+    SWD_INLINE uint32_t read_bit() {
         p_.clk_low();
         p_.half_period();
         const uint32_t bit = p_.dio_in() ? 1u : 0u;
@@ -152,19 +156,19 @@ private:
         return bit;
     }
 
-    inline void clock_only() {
+    SWD_INLINE void clock_only() {
         p_.clk_low();
         p_.half_period();
         p_.clk_high();
         p_.half_period();
     }
 
-    inline void turnaround() {
+    SWD_INLINE void turnaround() {
         for (uint32_t i = 0; i < cfg.turnaround; i++) clock_only();
     }
 
     // Idle cycles after a transfer: SWDIO low, then park high.
-    inline void idle() {
+    SWD_INLINE void idle() {
         for (uint32_t i = 0; i < cfg.idle_cycles; i++) write_bit(0);
         p_.dio_out(1);
     }

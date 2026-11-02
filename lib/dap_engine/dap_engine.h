@@ -30,12 +30,16 @@ void init(const Backend &backend);
 // or 0 if the request is larger than DAP_PACKET_SIZE or resp_cap is too small.
 size_t execute(const uint8_t *req, size_t req_len, uint8_t *resp, size_t resp_cap);
 
-// DAP_HostStatus indicators, for the screen.
+// DAP_HostStatus indicators plus what the engine has seen on the wire, for the screen.
 struct HostStatus {
     bool connected;
     bool running;
+    bool dpidr_valid;  // a DPIDR read has succeeded since the last DAP_Disconnect
+    uint32_t dpidr;
+    uint32_t errors;   // transfers that ended in FAULT, a parity error or no answer (WAIT is normal)
 };
 HostStatus host_status();
+void reset_errors();
 
 uint32_t packet_size();
 

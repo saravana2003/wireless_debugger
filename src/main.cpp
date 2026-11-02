@@ -8,6 +8,7 @@
 #include "swd_phy.h"
 #include "ui.h"
 #include "tcp_server.h"
+#include "touch.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "main";
@@ -26,6 +27,7 @@ void setup() {
     if (exp_ok) {
         ch422g::set_backlight(true);
     }
+    const bool touch_ok = exp_ok && touch::begin();
 #else
     (void)exp_ok;
     ESP_LOGW(TAG, "display disabled (WDBG_DISPLAY=0)");
@@ -39,6 +41,10 @@ void setup() {
     probe::init();
 
 #if WDBG_DISPLAY
+    if (touch_ok) {
+        touch::attach_to_arbiter();
+        ui::enable_touch();
+    }
     ui::start_task();
 #endif
     net::wifi_start();

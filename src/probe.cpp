@@ -7,6 +7,7 @@
 #include "dap_engine.h"
 #include "swd_phy.h"
 #include "swd_sim.h"
+#include "touch.h"
 #include "wdbg_log.h"
 
 static const char *TAG = "probe";
@@ -14,6 +15,7 @@ static const char *TAG = "probe";
 namespace {
 
 constexpr uint32_t BUS_TIMEOUT_MS = 100;
+constexpr uint8_t CMD_DAP_SWJ_SEQUENCE = 0x12;  // DAP.h ID_DAP_SWJ_Sequence
 
 #if WDBG_TARGET_SIM
 void sim_delay_cycles(uint32_t cycles) {
@@ -76,6 +78,7 @@ void init() {
 
 size_t handle_frame(const uint8_t *req, size_t len, uint8_t *resp, size_t cap) {
     if (len == 0 || cap < dap::packet_size()) return 0;
+    if (req[0] == CMD_DAP_SWJ_SEQUENCE) touch::note_swj_sequence();
 #if !WDBG_TARGET_SIM
     // GPIO9 is shared with I2C: own it for the whole packet (02_HARDWARE.md §4).
     if (!arb::acquire(arb::Owner::Swd, BUS_TIMEOUT_MS)) return error_response(req, resp);

@@ -3,6 +3,7 @@
 #include <unity.h>
 
 #include "framing_dap_tcp.h"
+#include "gt911_parse.h"
 
 namespace fr = net::framing_dap_tcp;
 
@@ -49,6 +50,19 @@ void test_encode_response() {
     TEST_ASSERT_EQUAL_HEX8_ARRAY(expected, hdr, fr::HEADER_SIZE);
 }
 
+void test_gt911_report() {
+    TEST_ASSERT_FALSE(touch::gt911_ready(0x05));   // bit 7 clear: nothing new
+    TEST_ASSERT_TRUE(touch::gt911_ready(0x81));
+    TEST_ASSERT_EQUAL_UINT8(1, touch::gt911_count(0x81));
+    TEST_ASSERT_EQUAL_UINT8(0, touch::gt911_count(0x80));  // ready, no points: finger lifted
+
+    const uint8_t point[8] = {0x01, 0x1F, 0x03, 0xDF, 0x01, 0x10, 0x00, 0x00};
+    uint16_t x = 0, y = 0;
+    touch::gt911_point(point, &x, &y);
+    TEST_ASSERT_EQUAL_UINT16(799, x);
+    TEST_ASSERT_EQUAL_UINT16(479, y);
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_decode_valid_request);
@@ -56,5 +70,6 @@ int main(int, char **) {
     RUN_TEST(test_decode_rejects_response_type);
     RUN_TEST(test_decode_length_limits);
     RUN_TEST(test_encode_response);
+    RUN_TEST(test_gt911_report);
     return UNITY_END();
 }

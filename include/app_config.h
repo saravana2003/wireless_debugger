@@ -1,7 +1,7 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.5.0"
+#define WDBG_FW_VERSION      "0.7.0"
 
 // 0 = don't start the LCD/LVGL (diagnostics: e.g. WiFi A/B test without PSRAM framebuffer traffic).
 #ifndef WDBG_DISPLAY
@@ -33,6 +33,17 @@
 
 // SWD (used from Phase 3)
 #define WDBG_SWD_DEFAULT_HZ  1000000
+// Hosts can ask for up to this. The GPIO matrix input delay eats into the read setup time at higher
+// clocks; not yet proven on a real target (PENDING-HW), so the default stays at 1 MHz.
+#define WDBG_SWD_MAX_HZ      4000000u
 
 // I2C bus 1 (CH422G at boot; touch from Phase 7)
 #define WDBG_I2C_FREQ_HZ     400000
+
+// GT911 touch
+#define WDBG_TOUCH_I2C_ADDR       0x14
+#define WDBG_TOUCH_POLL_MS        25    // while a finger is down
+#define WDBG_TOUCH_IDLE_POLL_MS   50    // with no TCP client (no debugger, so I2C can't disturb SWD)
+#define WDBG_TOUCH_I2C_TIMEOUT_MS 20
+#define WDBG_TOUCH_HOLDOFF_MS     200   // no I2C this long after a host SWJ sequence
+#define WDBG_TOUCH_STUCK_MS       300   // no report this long while pressed -> treat as released

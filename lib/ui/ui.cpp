@@ -13,6 +13,7 @@
 #include "dap_engine.h"
 #include "stats.h"
 #include "swd_phy.h"
+#include "touch.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "ui";
@@ -39,6 +40,14 @@ lv_obj_t *s_ip_val = nullptr;
 lv_obj_t *s_client_val = nullptr;
 lv_obj_t *s_swd_val = nullptr;
 lv_obj_t *s_target_val = nullptr;
+lv_obj_t *s_clocks_val = nullptr;
+lv_obj_t *s_touch_val = nullptr;
+lv_obj_t *s_limit_label = nullptr;
+lv_obj_t *s_big_ip = nullptr;
+lv_obj_t *s_big_ip_label = nullptr;
+lv_indev_drv_t s_indev_drv;
+
+constexpr uint32_t CLOCK_LIMITS_HZ[] = {1000000, 2000000, WDBG_SWD_MAX_HZ};
 
 void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     // LV_COLOR_16_SWAP=0 -> native RGB565, which is what the esp_lcd frame buffer holds.
@@ -59,6 +68,49 @@ lv_obj_t *add_row(lv_obj_t *parent, const char *name, int y) {
     return val;
 }
 
+void update_limit_label() {
+    lv_label_set_text_fmt(s_limit_label, "SWCLK limit: %u MHz", (unsigned)(swd::clock_limit() / 1000000));
+}
+
+void on_reset_stats(lv_event_t *) {
+    stats::g.errors.store(0, std::memory_order_relaxed);
+    dap::reset_errors();
+}
+
+// Next limit in the list, wrapping around.
+void on_clock_limit(lv_event_t *) {
+    const uint32_t cur = swd::clock_limit();
+    uint32_t next = CLOCK_LIMITS_HZ[0];
+    for (const uint32_t hz : CLOCK_LIMITS_HZ) {
+        if (hz > cur) {
+            next = hz;
+            break;
+        }
+    }
+    swd::set_clock_limit(next);
+    update_limit_label();
+}
+
+void on_show_ip(lv_event_t *) {
+    const net::WifiStatus st = net::wifi_status();
+    lv_label_set_text(s_big_ip_label, st.ip);
+    lv_obj_clear_flag(s_big_ip, LV_OBJ_FLAG_HIDDEN);
+}
+
+void on_hide_ip(lv_event_t *) { lv_obj_add_flag(s_big_ip, LV_OBJ_FLAG_HIDDEN); }
+
+lv_obj_t *add_button(lv_obj_t *parent, const char *text, int x, lv_event_cb_t cb) {
+    lv_obj_t *btn = lv_btn_create(parent);
+    lv_obj_set_size(btn, 230, 70);
+    lv_obj_set_pos(btn, x, 390);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *label = lv_label_create(btn);
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_18, 0);
+    lv_obj_center(label);
+    return label;
+}
+
 void build_boot_screen() {
     lv_obj_t *scr = lv_scr_act();
 
@@ -72,11 +124,44 @@ void build_boot_screen() {
     lv_obj_set_style_text_font(ver, &lv_font_montserrat_14, 0);
     lv_obj_set_pos(ver, 40, 62);
 
-    s_wifi_val = add_row(scr, "WiFi:", 130);
-    s_ip_val = add_row(scr, "IP:", 170);
-    s_client_val = add_row(scr, "Client:", 210);
-    s_target_val = add_row(scr, "Target:", 250);
-    s_swd_val = add_row(scr, "SWD:", 290);
+    lv_obj_t *badge = lv_label_create(scr);
+    lv_label_set_text(badge, WDBG_TARGET_SIM ? "SIMULATED TARGET" : "REAL TARGET");
+    lv_obj_set_style_text_font(badge, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(badge, lv_palette_main(WDBG_TARGET_SIM ? LV_PALETTE_ORANGE : LV_PALETTE_GREEN), 0);
+    lv_obj_set_pos(badge, 530, 30);
+
+    s_wifi_val = add_row(scr, "WiFi:", 110);
+    s_ip_val = add_row(scr, "IP:", 150);
+    s_client_val = add_row(scr, "Client:", 190);
+    s_target_val = add_row(scr, "Target:", 230);
+    s_swd_val = add_row(scr, "SWD:", 270);
+    s_clocks_val = add_row(scr, "Clocks:", 310);
+    s_touch_val = add_row(scr, "Touch:", 350);
+
+    add_button(scr, "Reset errors", 30, on_reset_stats);
+    s_limit_label = add_button(scr, "", 285, on_clock_limit);
+    update_limit_label();
+    add_button(scr, "Show IP", 540, on_show_ip);
+
+    // Full-screen IP, for reading it from across the desk. Tap anywhere to close.
+    s_big_ip = lv_obj_create(scr);
+    lv_obj_set_size(s_big_ip, SCREEN_W, SCREEN_H);
+    lv_obj_set_pos(s_big_ip, 0, 0);
+    lv_obj_add_flag(s_big_ip, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_big_ip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_big_ip, on_hide_ip, LV_EVENT_CLICKED, nullptr);
+    s_big_ip_label = lv_label_create(s_big_ip);
+    lv_obj_set_style_text_font(s_big_ip_label, &lv_font_montserrat_48, 0);
+    lv_obj_center(s_big_ip_label);
+}
+
+void touch_read_cb(lv_indev_drv_t *, lv_indev_data_t *data) {
+    bool pressed = false;
+    uint16_t x = 0, y = 0;
+    touch::read(&pressed, &x, &y);
+    data->state = pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+    data->point.x = x;
+    data->point.y = y;
 }
 
 // Client row: peer address plus frame/byte rates since the previous refresh.
@@ -96,33 +181,48 @@ void refresh_client() {
     const uint32_t ip = stats::g.client_ip.load(std::memory_order_relaxed);
     const uint32_t errs = stats::g.errors.load(std::memory_order_relaxed);
     if (ip == 0) {
-        lv_label_set_text_fmt(s_client_val, "--   (errors %u)", (unsigned)errs);
+        lv_label_set_text_fmt(s_client_val, "--   net errors %u", (unsigned)errs);
         return;
     }
     const uint8_t *b = reinterpret_cast<const uint8_t *>(&ip);  // network byte order
-    lv_label_set_text_fmt(s_client_val, "%u.%u.%u.%u   %u pkt/s   %u kB/s   errors %u",
+    lv_label_set_text_fmt(s_client_val, "%u.%u.%u.%u  %u pkt/s  %u kB/s  err %u",
                           b[0], b[1], b[2], b[3], (unsigned)fps, (unsigned)kbps, (unsigned)errs);
 }
 
-// Target row: which backend, and the host's DAP_HostStatus indicators.
+// Target row: what we saw on the wire. Halted/running is not shown: only the host knows that (it
+// reads DHCSR through us like any other memory), and pyOCD/OpenOCD don't report it via DAP_HostStatus.
 void refresh_target() {
     const dap::HostStatus hs = dap::host_status();
-    lv_label_set_text_fmt(s_target_val, "%s   debugger %s%s",
-                          WDBG_TARGET_SIM ? "SIMULATED (64 KB RAM @ 0x20000000)" : "SWD pins (GPIO6/GPIO9)",
-                          hs.connected ? "connected" : "idle", hs.running ? ", target running" : "");
+    if (hs.dpidr_valid) {
+        lv_label_set_text_fmt(s_target_val, "DPIDR 0x%08X   SWD errors %u", (unsigned)hs.dpidr, (unsigned)hs.errors);
+    } else {
+        lv_label_set_text_fmt(s_target_val, "%s   SWD errors %u", hs.connected ? "debugger connected" : "idle",
+                              (unsigned)hs.errors);
+    }
 }
 
-// SWD row: boot self-test result (Phase 3).
+// SWD row: the clock in use, plus the boot self-test.
 void refresh_swd() {
     const swd::SelfTest t = swd::last_self_test();
     if (!t.ran) {
         lv_label_set_text(s_swd_val, "self-test not run");
         return;
     }
-    lv_label_set_text_fmt(s_swd_val, "max %u.%02u MHz   set %u kHz -> %u kHz   DPIDR ack 0x%X%s",
-                          (unsigned)(t.max_hz / 1000000), (unsigned)(t.max_hz / 10000 % 100),
-                          (unsigned)(t.set_hz / 1000), (unsigned)(t.measured_hz / 1000), t.dpidr_ack,
-                          t.dpidr_ack == swd::ACK_OK ? "" : " (no target)");
+    lv_label_set_text_fmt(s_swd_val, "%u kHz (limit %u)   max %u.%u MHz   boot ack 0x%X",
+                          (unsigned)(swd::clock_hz() / 1000), (unsigned)(swd::clock_limit() / 1000),
+                          (unsigned)(t.max_hz / 1000000), (unsigned)(t.max_hz / 100000 % 10), t.dpidr_ack);
+    lv_label_set_text_fmt(s_clocks_val, "1M: %u   2M: %u   4M: %u kHz (boot test)", (unsigned)(t.measured_hz / 1000),
+                          (unsigned)(t.measured_mid_hz / 1000), (unsigned)(t.measured_max_hz / 1000));
+}
+
+void refresh_touch() {
+    const touch::Diag d = touch::diag();
+    if (!d.found) {
+        lv_label_set_text(s_touch_val, "GT911 NOT FOUND");
+        return;
+    }
+    lv_label_set_text_fmt(s_touch_val, "INT %u  rep %u  press %u  fail %u  @%u,%u", (unsigned)d.ints,
+                          (unsigned)d.reports, (unsigned)d.presses, (unsigned)d.i2c_fails, d.x, d.y);
 }
 
 // Runs in the ui task (LVGL timer): pull the WiFi snapshot, update labels.
@@ -150,6 +250,7 @@ void refresh_status(lv_timer_t *) {
     refresh_client();
     refresh_swd();
     refresh_target();
+    refresh_touch();
 }
 
 void ui_task(void *) {
@@ -201,6 +302,13 @@ bool init() {
 
     ESP_LOGI(TAG, "init ok");
     return true;
+}
+
+void enable_touch() {
+    lv_indev_drv_init(&s_indev_drv);
+    s_indev_drv.type = LV_INDEV_TYPE_POINTER;
+    s_indev_drv.read_cb = touch_read_cb;
+    lv_indev_drv_register(&s_indev_drv);
 }
 
 void start_task() {

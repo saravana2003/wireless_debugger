@@ -10,6 +10,9 @@ namespace ui {
 bool init();
 
 // Start the LVGL handler task (core 1, low priority).
+// Register the touch input device. Call before start_task(), only if touch::begin() succeeded.
+void enable_touch();
+
 void start_task();
 
 void lock();

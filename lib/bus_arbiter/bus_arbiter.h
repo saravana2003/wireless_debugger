@@ -20,7 +20,7 @@ struct Hooks {
 void init();
 void set_hooks(Owner who, Hooks hooks);
 
-// Blocks up to timeout_ms. Returns false on timeout (pin not touched).
+// Blocks up to timeout_ms (0 = just try). Returns false on timeout (pin not touched).
 bool acquire(Owner who, uint32_t timeout_ms);
 void release(Owner who);
 

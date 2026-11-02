@@ -39,7 +39,7 @@ void set_hooks(Owner who, Hooks hooks) {
 bool acquire(Owner who, uint32_t timeout_ms) {
     if (!s_mutex || who == Owner::None) return false;
     if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
-        ESP_LOGW(TAG, "%s: timeout waiting for the bus (held by %s)", name(who), name(s_holder));
+        if (timeout_ms > 0) ESP_LOGW(TAG, "%s: timeout waiting for the bus (held by %s)", name(who), name(s_holder));
         return false;
     }
     s_holder = who;

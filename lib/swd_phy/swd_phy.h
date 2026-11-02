@@ -18,6 +18,10 @@ void init();
 uint32_t set_clock(uint32_t hz);
 uint32_t clock_hz();
 
+// Upper limit on what the host can set (touch control). Applies immediately.
+void set_clock_limit(uint32_t hz);
+uint32_t clock_limit();
+
 Config &config();
 
 // DAP_Connect / DAP_Disconnect: start / stop driving SWCLK and SWDIO. While disconnected all
@@ -42,6 +46,8 @@ struct SelfTest {
     uint32_t max_hz_no_irq; // same, with interrupts masked on this core (diagnostics)
     uint32_t set_hz;        // requested default clock
     uint32_t measured_hz;   // measured at the default clock
+    uint32_t measured_mid_hz;  // measured at WDBG_SWD_MAX_HZ / 2
+    uint32_t measured_max_hz;  // measured at WDBG_SWD_MAX_HZ
     uint8_t dpidr_ack;      // ACK of a DPIDR read (0x7 = nothing answered, pull-up)
 };
 

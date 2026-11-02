@@ -12,7 +12,7 @@ namespace {
 dap::Backend s_be = {};
 swd::Config s_cfg_sent = {};       // last config pushed to the backend
 bool s_cfg_valid = false;
-dap::HostStatus s_status = {false, false};
+dap::HostStatus s_status = {};
 
 // DAP.c reads requests without length checks (USB packets are always DAP_PACKET_SIZE), so every
 // request is copied into a zero-padded buffer of that size first.
@@ -52,7 +52,18 @@ void SWD_Sequence(uint32_t info, const uint8_t *swdo, uint8_t *swdi) {
 
 uint8_t SWD_Transfer(uint32_t request, uint32_t *data) {
     sync_config();
-    return s_be.transfer(static_cast<uint8_t>(request & 0x0FU), data);
+    const uint8_t req = static_cast<uint8_t>(request & 0x0FU);
+    const uint8_t ack = s_be.transfer(req, data);
+    if (ack == swd::ACK_OK) {
+        // DP read at address 0 is DPIDR: remember the last one, for the screen.
+        if (req == swd::REQ_RnW && data) {
+            s_status.dpidr = *data;
+            s_status.dpidr_valid = true;
+        }
+    } else if (ack != swd::ACK_WAIT) {
+        s_status.errors++;
+    }
+    return ack;
 }
 
 // ---- DAP_config.h hooks ----
@@ -67,6 +78,7 @@ void dap_port_connect(void) {
     if (s_be.connect) s_be.connect();
 }
 void dap_port_disconnect(void) {
+    s_status.dpidr_valid = false;
     if (s_be.disconnect) s_be.disconnect();
 }
 void dap_port_pins_write(uint32_t value, uint32_t select) {
@@ -90,7 +102,7 @@ namespace dap {
 void init(const Backend &backend) {
     s_be = backend;
     s_cfg_valid = false;
-    s_status = {false, false};
+    s_status = {};
     DAP_Setup();
 }
 
@@ -103,6 +115,7 @@ size_t execute(const uint8_t *req, size_t req_len, uint8_t *resp, size_t resp_ca
 }
 
 HostStatus host_status() { return s_status; }
+void reset_errors() { s_status.errors = 0; }
 uint32_t packet_size() { return DAP_PACKET_SIZE; }
 
 }  // namespace dap
