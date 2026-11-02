@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyocd-wdbg"
+version = "0.1.0"
+description = "pyOCD probe plugin for the Wireless Debugger (CMSIS-DAP over TCP)"
+requires-python = ">=3.8"
+# Pinned: the plugin uses pyOCD internals (pydapaccess), which can change between releases.
+dependencies = ["pyocd==0.46.0"]
+
+[project.entry-points."pyocd.probe"]
+wdbg = "pyocd_wdbg:WdbgProbePlugin"
+
+[tool.setuptools]
+packages = ["pyocd_wdbg"]

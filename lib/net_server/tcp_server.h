@@ -1,8 +1,8 @@
 #pragma once
-// tcp_server: single-client TCP server with raw framing. Each received frame is passed to a
+// tcp_server: single-client TCP server speaking OpenOCD's cmsis-dap-tcp framing. Each frame is passed to a
 // handler, and the handler's response is sent back as one frame.
 //
-// Phase 2: the handler echoes. Phase 4: the handler is the CMSIS-DAP engine.
+// The handler is the CMSIS-DAP engine.
 
 #include <stddef.h>
 #include <stdint.h>

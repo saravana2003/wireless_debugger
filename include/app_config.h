@@ -1,7 +1,7 @@
 #pragma once
 // app_config.h: tunable application settings (no pin numbers here, see board_pins.h).
 
-#define WDBG_FW_VERSION      "0.4.0"
+#define WDBG_FW_VERSION      "0.5.0"
 
 // 0 = don't start the LCD/LVGL (diagnostics: e.g. WiFi A/B test without PSRAM framebuffer traffic).
 #ifndef WDBG_DISPLAY
@@ -17,9 +17,9 @@
 
 // Network (used from Phase 1/2)
 #define WDBG_MDNS_NAME       "wdbg"     // -> wdbg.local
-#define WDBG_TCP_PORT        4242       // our choice; Phase 5 may change it to match the host tool
+#define WDBG_TCP_PORT        4441       // default port of OpenOCD's "cmsis-dap backend tcp"
 #define WDBG_STA_TIMEOUT_MS  10000      // fall back to AP mode after this
-#define WDBG_FRAME_MAX       4096       // max payload of one TCP frame (bytes)
+#define WDBG_FRAME_MAX       1024       // max payload of one TCP frame (OpenOCD's limit too)
 #define WDBG_RX_TIMEOUT_MS   2000       // drop the client if a frame stalls half-way
 
 // Target: 0 = real SWD pins, 1 = simulated target (esp32_sim env sets -DWDBG_TARGET_SIM=1)

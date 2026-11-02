@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""dap_client.py: CMSIS-DAP test client for the Wireless Debugger (raw TCP framing).
+"""dap_client.py: CMSIS-DAP test client for the Wireless Debugger.
 
-Framing: [u16 length, little-endian][CMSIS-DAP packet]. Command IDs and layouts follow ARM's
+Framing: OpenOCD cmsis-dap-tcp (see lib/net_server/framing_dap_tcp.h). Command IDs and layouts follow ARM's
 CMSIS-DAP (DAP.h); DP/AP register usage follows ADIv5 (MEM-AP CSW/TAR/DRW).
 
 Examples:
@@ -19,7 +19,9 @@ import struct
 import sys
 import time
 
-DEFAULT_PORT = 4242   # WDBG_TCP_PORT in include/app_config.h
+DEFAULT_PORT = 4441   # WDBG_TCP_PORT in include/app_config.h
+
+FRAME_SIGNATURE, FRAME_HEADER_SIZE, FRAME_REQUEST, FRAME_RESPONSE = 0x00504144, 8, 1, 2
 
 # CMSIS-DAP command IDs (DAP.h)
 ID_INFO, ID_CONNECT, ID_DISCONNECT = 0x00, 0x02, 0x03
@@ -56,7 +58,7 @@ class Probe:
 
     # ---- framing ----
     def send_frame(self, payload):
-        self.sock.sendall(struct.pack("<H", len(payload)) + payload)
+        self.sock.sendall(struct.pack("<IHBB", FRAME_SIGNATURE, len(payload), FRAME_REQUEST, 0) + payload)
 
     def _recv_exact(self, n):
         buf = bytearray()
@@ -68,7 +70,9 @@ class Probe:
         return bytes(buf)
 
     def recv_frame(self):
-        (n,) = struct.unpack("<H", self._recv_exact(2))
+        sig, n, kind, _ = struct.unpack("<IHBB", self._recv_exact(FRAME_HEADER_SIZE))
+        if sig != FRAME_SIGNATURE or kind != FRAME_RESPONSE:
+            raise DapError(f"bad frame header: signature 0x{sig:08X}, type {kind}")
         return self._recv_exact(n)
 
     def cmd(self, payload):

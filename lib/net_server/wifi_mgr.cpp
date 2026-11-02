@@ -1,3 +1,6 @@
+// ESP32 only. Native (unit test) builds only use framing_dap_tcp.
+#if defined(ESP_PLATFORM)
+
 #include "wifi_mgr.h"
 
 #include <Arduino.h>
@@ -128,3 +131,5 @@ WifiStatus wifi_status() {
 }
 
 }  // namespace net
+
+#endif  // ESP_PLATFORM

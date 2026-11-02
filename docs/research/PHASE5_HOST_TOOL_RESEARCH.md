@@ -3,7 +3,7 @@
 Question (03_PROTOCOLS.md §5): how does VS Code / GDB reach our WiFi CMSIS-DAP probe, and which tool can
 debug **and flash** the EK-RA8D1 (R7FA8D1BHECBD, Cortex-M85)?
 
-**Status: research done, recommendation presented to Saro, DECISION PENDING.** Nothing implemented yet.
+**Status: decided by Saro 2026-11-02 (recommendation below accepted) and implemented, see docs/HOST_SETUP.md.**
 
 ## 1. OpenOCD has a CMSIS-DAP-over-TCP backend (upstream)
 - File: `src/jtag/drivers/cmsis_dap_tcp.c` in github.com/openocd-org/openocd (GPL-2.0, author Brian Kuschak).

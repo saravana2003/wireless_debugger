@@ -9,6 +9,7 @@
 #include "DAP_config.h"
 #include "DAP.h"
 #include "dap_engine.h"
+#include "sim_core.h"
 #include "swd_sim.h"
 
 namespace {
@@ -223,6 +224,136 @@ void test_oversized_request_rejected() {
     TEST_ASSERT_EQUAL(0, dap::execute(big.data(), big.size(), resp.data(), resp.size()));
 }
 
+namespace core = swd_sim::core;
+
+// One target word through the real path: DAP packet -> DP/AP -> MEM-AP -> simulated bus.
+uint32_t mem_read32(uint32_t addr) {
+    Bytes r = transfer({{AP_W_TAR, addr}, {AP_R_DRW, 0}});
+    TEST_ASSERT_EQUAL_HEX8(DAP_TRANSFER_OK, r[2]);
+    return get32(r, 3);
+}
+void mem_write32(uint32_t addr, uint32_t value) {
+    Bytes r = transfer({{AP_W_TAR, addr}, {AP_W_DRW, value}});
+    TEST_ASSERT_EQUAL_HEX8(DAP_TRANSFER_OK, r[2]);
+}
+void connect_for_core() {
+    connect_and_power_up();
+    transfer({{AP_W_CSW, 0x12}});
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN);
+}
+
+void test_csw_refuses_unimplemented_size() {
+    connect_and_power_up();
+    // Hosts probe transfer sizes by writing CSW and reading it back: 64-bit must not stick.
+    Bytes r = transfer({{AP_W_CSW, 0x12}, {AP_W_CSW, 0x13}, {AP_R_CSW, 0}});
+    TEST_ASSERT_EQUAL_HEX32(0x2u, get32(r, 3) & 0x7u);
+}
+
+void test_rom_table_finds_scs() {
+    connect_and_power_up();
+    // AP BASE (reg 0xF8: APBANKSEL 0xF, A[3:2] = 2): ADIv5 format, entry present.
+    Bytes r = transfer({{DP_W_SELECT, 0xF0}, {0x0B, 0}, {DP_W_SELECT, 0}});
+    const uint32_t base = get32(r, 3);
+    TEST_ASSERT_EQUAL_HEX32(core::ROM_TABLE_BASE | 0x3u, base);
+
+    transfer({{AP_W_CSW, 0x12}});
+    const uint32_t rom = base & 0xFFFFF000u;
+    TEST_ASSERT_EQUAL_HEX32(0x1u, (mem_read32(rom + 0xFF4) >> 4) & 0xFu);  // CIDR1: class 1, ROM table
+    // Entry 0: signed offset from the table to the SCS.
+    const uint32_t entry = mem_read32(rom);
+    TEST_ASSERT_EQUAL_HEX32(0x3u, entry & 0x3u);
+    const uint32_t scs = rom + (entry & 0xFFFFF000u);
+    TEST_ASSERT_EQUAL_HEX32(core::SCS_BASE, scs);
+    TEST_ASSERT_EQUAL_HEX32(0x0u, mem_read32(rom + 12));  // end of table
+    // SCS identifies as a CoreSight (class 9) Cortex-M85 v8-M debug block.
+    TEST_ASSERT_EQUAL_HEX32(0x9u, (mem_read32(scs + 0xFF4) >> 4) & 0xFu);
+    TEST_ASSERT_EQUAL_HEX32(0x23u, mem_read32(scs + 0xFE0));
+    TEST_ASSERT_EQUAL_HEX32(0xBDu, mem_read32(scs + 0xFE4));
+    TEST_ASSERT_EQUAL_HEX32(0x47702A04u, mem_read32(scs + 0xFBC));
+    TEST_ASSERT_EQUAL_HEX32(core::CPUID_VALUE, mem_read32(core::CPUID));
+}
+
+void test_dhcsr_needs_key() {
+    connect_and_power_up();
+    transfer({{AP_W_CSW, 0x12}});
+    mem_write32(core::DHCSR, core::C_DEBUGEN | core::C_HALT);  // no DBGKEY: ignored
+    TEST_ASSERT_FALSE(core::halted());
+    TEST_ASSERT_FALSE(mem_read32(core::DHCSR) & core::C_DEBUGEN);
+}
+
+void test_halt_and_core_registers() {
+    connect_for_core();
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN | core::C_HALT);
+    TEST_ASSERT_TRUE(mem_read32(core::DHCSR) & core::S_HALT);
+    TEST_ASSERT_TRUE(mem_read32(core::DFSR) & core::DFSR_HALTED);
+
+    // Write r5 through DCRDR/DCRSR, then read it back.
+    mem_write32(core::DCRDR, 0x12345678);
+    mem_write32(core::DCRSR, core::DCRSR_REGWNR | 5);
+    TEST_ASSERT_EQUAL_HEX32(0x12345678, core::reg(5));
+    mem_write32(core::DCRDR, 0);
+    mem_write32(core::DCRSR, 5);
+    TEST_ASSERT_EQUAL_HEX32(0x12345678, mem_read32(core::DCRDR));
+}
+
+void test_step_sets_c_halt() {
+    connect_for_core();
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN | core::C_HALT);
+    const uint32_t pc = core::reg(core::REG_PC);
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN | core::C_STEP);
+    // pyOCD's step waits for C_HALT, which the PE sets itself on entering Debug state.
+    const uint32_t dhcsr = mem_read32(core::DHCSR);
+    TEST_ASSERT_TRUE(dhcsr & core::C_HALT);
+    TEST_ASSERT_TRUE(dhcsr & core::S_HALT);
+    TEST_ASSERT_TRUE(dhcsr & core::S_RETIRE_ST);
+    TEST_ASSERT_EQUAL_HEX32(pc + 2, core::reg(core::REG_PC));
+}
+
+void test_breakpoint_stops_running_core() {
+    connect_for_core();
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN | core::C_HALT);
+    const uint32_t target = swd_sim::RAM_BASE + 0x100;
+    mem_write32(core::FPB_BASE, core::FP_CTRL_KEY | core::FP_CTRL_ENABLE);
+    mem_write32(core::FPB_BASE + 8, target | 1u);  // FP_COMP0, enabled
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN);
+    TEST_ASSERT_FALSE(core::halted());
+    const uint32_t dhcsr = mem_read32(core::DHCSR);  // polling is what moves the simulated PC
+    TEST_ASSERT_TRUE(dhcsr & core::S_HALT);
+    TEST_ASSERT_TRUE(dhcsr & core::C_HALT);
+    TEST_ASSERT_EQUAL_HEX32(target, core::reg(core::REG_PC));
+    TEST_ASSERT_TRUE(mem_read32(core::DFSR) & core::DFSR_BKPT);
+}
+
+void test_breakpoint_at_current_pc_halts_without_executing() {
+    connect_for_core();
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN | core::C_HALT);
+    const uint32_t pc = core::reg(core::REG_PC);
+    mem_write32(core::FPB_BASE, core::FP_CTRL_KEY | core::FP_CTRL_ENABLE);
+    mem_write32(core::FPB_BASE + 8, pc | 1u);
+    mem_write32(core::DHCSR, core::DBGKEY | core::C_DEBUGEN);
+    // First poll must already see the halt: OpenOCD's step gives up after 500 ms of polling.
+    TEST_ASSERT_TRUE(mem_read32(core::DHCSR) & core::S_HALT);
+    TEST_ASSERT_EQUAL_HEX32(pc, core::reg(core::REG_PC));
+}
+
+void test_reset_catch_halts_at_reset() {
+    connect_for_core();
+    mem_write32(core::DEMCR, core::DEMCR_VC_CORERESET);
+    mem_write32(core::AIRCR, core::AIRCR_VECTKEY | core::AIRCR_SYSRESETREQ);
+    const uint32_t dhcsr = mem_read32(core::DHCSR);
+    TEST_ASSERT_TRUE(dhcsr & core::S_HALT);
+    TEST_ASSERT_TRUE(dhcsr & core::S_RESET_ST);
+    TEST_ASSERT_FALSE(mem_read32(core::DHCSR) & core::S_RESET_ST);  // sticky: cleared by the read
+    TEST_ASSERT_TRUE(mem_read32(core::DFSR) & core::DFSR_VCATCH);
+    TEST_ASSERT_EQUAL_HEX32(swd_sim::RAM_BASE, core::reg(core::REG_PC));
+
+    // AIRCR without the key does nothing.
+    mem_write32(core::DCRDR, 0xAB);
+    mem_write32(core::DCRSR, core::DCRSR_REGWNR | 1);
+    mem_write32(core::AIRCR, core::AIRCR_SYSRESETREQ);
+    TEST_ASSERT_EQUAL_HEX32(0xAB, core::reg(1));
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_info);
@@ -237,5 +368,13 @@ int main(int, char **) {
     RUN_TEST(test_unmapped_read_sets_stickyerr_then_abort_clears);
     RUN_TEST(test_execute_commands_batch);
     RUN_TEST(test_oversized_request_rejected);
+    RUN_TEST(test_csw_refuses_unimplemented_size);
+    RUN_TEST(test_rom_table_finds_scs);
+    RUN_TEST(test_dhcsr_needs_key);
+    RUN_TEST(test_halt_and_core_registers);
+    RUN_TEST(test_step_sets_c_halt);
+    RUN_TEST(test_breakpoint_stops_running_core);
+    RUN_TEST(test_breakpoint_at_current_pc_halts_without_executing);
+    RUN_TEST(test_reset_catch_halts_at_reset);
     return UNITY_END();
 }

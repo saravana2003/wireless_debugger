@@ -1,3 +1,6 @@
+// ESP32 only. Native (unit test) builds only use framing_dap_tcp.
+#if defined(ESP_PLATFORM)
+
 #include "tcp_server.h"
 
 #include <Arduino.h>
@@ -6,7 +9,7 @@
 #include <lwip/sockets.h>
 
 #include "app_config.h"
-#include "framing_raw.h"
+#include "framing_dap_tcp.h"
 #include "stats.h"
 #include "wifi_mgr.h"
 
@@ -14,7 +17,7 @@ static const char *TAG = "tcp";
 
 namespace {
 
-namespace fr = net::framing_raw;
+namespace fr = net::framing_dap_tcp;
 
 net::FrameHandler s_handler = nullptr;
 
@@ -60,8 +63,8 @@ bool serve_one(int fd) {
     uint8_t hdr[fr::HEADER_SIZE];
     uint16_t len = 0;
     if (!recv_exact(fd, hdr, sizeof(hdr))) return false;
-    if (!fr::decode_header(hdr, WDBG_FRAME_MAX, &len)) {
-        ESP_LOGW(TAG, "bad frame length %u", (unsigned)(hdr[0] | (hdr[1] << 8)));
+    if (!fr::decode_request(hdr, WDBG_FRAME_MAX, &len)) {
+        ESP_LOGW(TAG, "bad frame header (type %u, length %u)", hdr[6], (unsigned)(hdr[4] | (hdr[5] << 8)));
         stats::add(stats::g.errors);
         return false;
     }
@@ -71,7 +74,7 @@ bool serve_one(int fd) {
 
     const size_t out = s_handler(s_rx, len, s_tx + fr::HEADER_SIZE, WDBG_FRAME_MAX);
     if (out == 0) return true;
-    fr::encode_header(static_cast<uint16_t>(out), s_tx);
+    fr::encode_response(static_cast<uint16_t>(out), s_tx);
     // Header + payload in a single send, so it leaves as one TCP segment.
     if (!send_all(fd, s_tx, fr::HEADER_SIZE + out)) return false;
     stats::add(stats::g.tx_frames);
@@ -182,3 +185,5 @@ void tcp_start(FrameHandler handler) {
 }
 
 }  // namespace net
+
+#endif  // ESP_PLATFORM

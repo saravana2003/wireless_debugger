@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "sim_core.h"
+
 namespace swd_sim {
 namespace {
 
@@ -26,7 +28,10 @@ constexpr uint8_t REG_CFG = 0xF4;
 constexpr uint8_t REG_BASE = 0xF8;
 constexpr uint8_t REG_IDR = 0xFC;
 
+constexpr uint32_t BASE_FORMAT_ADIV5 = 1u << 1, BASE_ENTRY_PRESENT = 1u << 0;
+
 constexpr uint32_t CSW_SIZE_MASK = 0x7u;      // 0 byte, 1 halfword, 2 word
+constexpr uint32_t CSW_SIZE_MAX = 2u;
 constexpr uint32_t CSW_ADDRINC_MASK = 0x30u;  // 0 off, 1 single
 constexpr uint32_t CSW_DEVICEEN = 1u << 6;    // read-only 1: transfers enabled
 constexpr uint32_t STICKY_FLAGS = STICKYERR | STICKYCMP | STICKYORUN | WDATAERR;
@@ -47,42 +52,58 @@ uint8_t s_ram[RAM_SIZE];
 
 bool powered() { return (s.ctrl_stat & CDBGPWRUPACK) && (s.ctrl_stat & CSYSPWRUPACK); }
 
-bool ram_access(uint32_t addr, uint32_t bytes) {
-    return addr >= RAM_BASE && addr - RAM_BASE <= RAM_SIZE - bytes;
+// One aligned 32-bit bus access. Returns false if nothing is mapped there.
+bool bus_read(uint32_t word_addr, uint32_t *w) {
+    if (core::maps(word_addr)) {
+        *w = core::read32(word_addr);
+        return true;
+    }
+    if (word_addr < RAM_BASE || word_addr - RAM_BASE > RAM_SIZE - 4) return false;
+    memcpy(w, s_ram + (word_addr - RAM_BASE), 4);  // ESP32 and x86 are little-endian, as is the AP
+    return true;
+}
+
+bool bus_write(uint32_t word_addr, uint32_t w) {
+    if (core::maps(word_addr)) {
+        core::write32(word_addr, w);
+        return true;
+    }
+    if (word_addr < RAM_BASE || word_addr - RAM_BASE > RAM_SIZE - 4) return false;
+    memcpy(s_ram + (word_addr - RAM_BASE), &w, 4);
+    return true;
+}
+
+// Byte lanes selected by TAR[1:0] for the CSW size (ADIv5). Word: all four.
+uint32_t lane_mask(uint32_t addr, uint32_t size) {
+    if (size == 2) return 0xFFFFFFFFu;
+    return ((size == 0) ? 0xFFu : 0xFFFFu) << ((addr & 3u) * 8u);
 }
 
 // One MEM-AP data access at `addr` with the CSW size. Unmapped -> STICKYERR (bus error).
 uint32_t mem_read(uint32_t addr) {
     const uint32_t size = s.csw & CSW_SIZE_MASK;
-    const uint32_t word_addr = addr & ~3u;
-    if (size > 2 || !ram_access(word_addr, 4)) {
+    uint32_t w = 0;
+    if (!bus_read(addr & ~3u, &w)) {
         s.ctrl_stat |= STICKYERR;
         return 0;
     }
-    uint32_t w;
-    memcpy(&w, s_ram + (word_addr - RAM_BASE), 4);  // ESP32 and x86 are little-endian, as is the AP
-    if (size == 2) return w;
-    // Byte/halfword: data appears on the byte lanes selected by TAR[1:0] (ADIv5 byte lanes).
-    const uint32_t lane = (addr & 3u) * 8u;
-    const uint32_t mask = (size == 0) ? 0xFFu : 0xFFFFu;
-    return w & (mask << lane);
+    return w & lane_mask(addr, size);
 }
 
 void mem_write(uint32_t addr, uint32_t value) {
     const uint32_t size = s.csw & CSW_SIZE_MASK;
     const uint32_t word_addr = addr & ~3u;
-    if (size > 2 || !ram_access(word_addr, 4)) {
+    if (size == 2) {
+        if (!bus_write(word_addr, value)) s.ctrl_stat |= STICKYERR;
+        return;
+    }
+    uint32_t w = 0;
+    if (!bus_read(word_addr, &w)) {
         s.ctrl_stat |= STICKYERR;
         return;
     }
-    uint8_t *p = s_ram + (word_addr - RAM_BASE);
-    if (size == 2) {
-        memcpy(p, &value, 4);
-        return;
-    }
-    const uint32_t lane = addr & 3u;
-    p[lane] = static_cast<uint8_t>(value >> (lane * 8));
-    if (size == 1) p[(lane + 1) & 3u] = static_cast<uint8_t>(value >> (((lane + 1) & 3u) * 8));
+    const uint32_t mask = lane_mask(addr, size);
+    bus_write(word_addr, (w & ~mask) | (value & mask));
 }
 
 // Auto-increment: only within a 1 KB block (TAR[9:0]); real MEM-APs don't guarantee more.
@@ -103,13 +124,13 @@ uint32_t ap_read(uint8_t reg) {
         }
         case REG_BD0: case REG_BD0 + 4: case REG_BD0 + 8: case REG_BD0 + 12: {
             const uint32_t saved = s.csw;
-            s.csw = (s.csw & ~CSW_SIZE_MASK) | 2u;  // banked data is always word-sized
+            s.csw = (s.csw & ~CSW_SIZE_MASK) | CSW_SIZE_MAX;  // banked data is always word-sized
             const uint32_t v = mem_read((s.tar & ~0xFu) | (reg - REG_BD0));
             s.csw = saved;
             return v;
         }
         case REG_CFG: return 0;             // little-endian, no large address/data
-        case REG_BASE: return 0xFFFFFFFFu;  // legacy format: no debug entries (no ROM table yet)
+        case REG_BASE: return core::ROM_TABLE_BASE | BASE_FORMAT_ADIV5 | BASE_ENTRY_PRESENT;
         case REG_IDR: return swd_sim::AP_IDR;
         default: return 0;
     }
@@ -117,7 +138,11 @@ uint32_t ap_read(uint8_t reg) {
 
 void ap_write(uint8_t reg, uint32_t v) {
     switch (reg) {
-        case REG_CSW: s.csw = v & ~CSW_DEVICEEN; break;
+        case REG_CSW:
+            // Larger sizes aren't implemented: keep the old size, so hosts that probe for them read it back.
+            if ((v & CSW_SIZE_MASK) > CSW_SIZE_MAX) v = (v & ~CSW_SIZE_MASK) | (s.csw & CSW_SIZE_MASK);
+            s.csw = v & ~CSW_DEVICEEN;
+            break;
         case REG_TAR: s.tar = v; break;
         case REG_DRW:
             mem_write(s.tar, v);
@@ -125,7 +150,7 @@ void ap_write(uint8_t reg, uint32_t v) {
             break;
         case REG_BD0: case REG_BD0 + 4: case REG_BD0 + 8: case REG_BD0 + 12: {
             const uint32_t saved = s.csw;
-            s.csw = (s.csw & ~CSW_SIZE_MASK) | 2u;
+            s.csw = (s.csw & ~CSW_SIZE_MASK) | CSW_SIZE_MAX;
             mem_write((s.tar & ~0xFu) | (reg - REG_BD0), v);
             s.csw = saved;
             break;
@@ -139,6 +164,7 @@ void ap_write(uint8_t reg, uint32_t v) {
 void reset() {
     memset(&s, 0, sizeof(s));
     memset(s_ram, 0, sizeof(s_ram));
+    core::reset();
 }
 
 void sequence_out(uint32_t count, const uint8_t *data) {

@@ -50,8 +50,7 @@ did this port for ESP chips with a WiFi transport (check its license and ESP32-S
 - `TCP_NODELAY` on. Large socket buffers.
 - **Framing must match whatever the chosen host backend expects** (see §5). Keep framing in its own small layer
   (`net_server/framing_*.cpp`) so it can be swapped:
-  - `framing_raw`: our own simple format for testing: `[u16 length LE][CMSIS-DAP packet]`.
-  - `framing_<host>`: added in Phase 5 to match the chosen host tool exactly.
+  - `framing_dap_tcp`: OpenOCD's cmsis-dap-tcp format. Our pyOCD plugin and `dap_client.py` speak it too.
 - Advertise via **mDNS** as `wdbg.local`.
 
 ## 4. Simulated target (`SIM`)
@@ -63,8 +62,10 @@ A software model behind the same `swd_phy` interface:
 - Enable it with the build flag `-DWDBG_TARGET_SIM=1` (the SIM env in platformio.ini) **and/or** a runtime switch on the
   screen. Keep it simple: build flag first.
 
-## 5. Host side: how VS Code reaches the probe (DECISION NEEDED, do research in Phase 5)
-Options, in rough order of preference. **Research the current state, then present a recommendation to Saro before
+## 5. Host side: how VS Code reaches the probe
+**Decided 2026-11-02: pyOCD + plugin (primary), OpenOCD (secondary), OpenOCD framing on port 4441. See docs/HOST_SETUP.md.**
+
+The options that were researched, in rough order of preference. **Research the current state, then present a recommendation to Saro before
 implementing.**
 
 1. **OpenOCD with a CMSIS-DAP network backend.** Check whether the current OpenOCD release has a TCP backend for
@@ -82,6 +83,6 @@ Whatever is chosen: deliver a working `.vscode/launch.json` example (Cortex-Debu
 explaining the install steps on Windows.
 
 ## 6. Test tooling (host, Python)
-`tools/dap_client.py`: a CLI that speaks our raw framing:
+`tools/dap_client.py`: a CLI that speaks the same framing:
 - `ping` / `info` (DAP_Info), `latency` (N round trips, min/avg/max), `throughput` (TransferBlock reads),
 - `read32 <addr>` / `write32 <addr> <val>` / `dump <addr> <len>` (via DP/AP transfers; works against SIM).

@@ -1,12 +1,12 @@
 #pragma once
 // swd_sim: a simulated SWD target at transaction level (same calls as the real SWD engine).
 //
-// Models an ADIv5 SW-DP (DPv1) and one MEM-AP with 64 KB of RAM at 0x20000000, enough for a host
-// to connect, power up the debug domain and read/write memory. Pure C++: runs on the ESP32
-// (esp32_sim env) and in the native unit tests. Register layouts: ARM IHI0031 (ADIv5.2).
+// Models an ADIv5 SW-DP (DPv1) and one MEM-AP with 64 KB of RAM at 0x20000000, plus a ROM table and
+// a debuggable Cortex-M85 core (sim_core.h). Pure C++: runs on the ESP32 (esp32_sim env), in the
+// native unit tests and in tools/sim_server. Register layouts: ARM IHI0031 (ADIv5.2).
 //
-// Deliberately simplified: no SCS/core registers yet (Phase 5 adds what the host tool needs),
-// no packed transfers, no overrun detection, single AP.
+// Deliberately simplified: no instruction execution, no packed transfers, no overrun detection,
+// single AP.
 
 #include <stdint.h>
 
